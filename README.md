@@ -2,26 +2,26 @@
 
 ## About This Project:
 
-The Timesheets Application is a tool designed to help you efficiently manage and keep track of your work hours. Whether you're a freelancer, contractor, or simply need to log your working hours, this application is here to simplify the process.
+The Timesheets Application is a tool designed to help your buisness efficiently manage and keep track of your work hours accross multiple applications similtanously. This is done with a windows application that creates and updates a local SQLite database with timesheet information. Then, while the user is connected to the internet, the application will upload that timehsheet information to a secure remote MS SQL server 2014 database that is located on your domain, using APIs. Furthermore, the program is structured to eliminate the chance of loosing, overwriting data or merge conflicts by using GUID's and properly structuring the merge and syncing functions.
 
 ## Built With:
 
-- **Language:** [Specify the programming language(s) used]
-- **Framework:** [Specify the framework, if any]
-- **Database:** [Specify the database system used, if applicable]
-- **Other Technologies:** [List any other relevant technologies or tools]
+- **Language:** VB.NET, ASP.NET (API's hosted on serverside, not included in repo)
+- **Framework:** .NET Framework 4.7.2
+- **Database:** local SQLite, MS SQL Server 2014 (remote secure, accessed by API)
+- **Other Technologies:** Windows userform application
 
 ## Getting Started:
 
-[Provide instructions on how to get started with the project. This might include installation, setup, or configuration steps.]
+
 
 ## Prerequisites:
 
-[List any prerequisites or dependencies that need to be installed before using the application. Include versions if relevant.]
+
 
 ## Usage:
 
-[Explain how to use the Timesheets Application. This could include step-by-step instructions or examples of common use cases.]
+
 
 ## Contact:
 
@@ -29,5 +29,5 @@ If you have any questions or suggestions, feel free to reach out:
 
 - **Email:** zachkonings@gmail.com
 
-[Additional contact information or links to relevant resources can be added here.]
+
 
