@@ -301,9 +301,7 @@
     </None>
     <None Include="App.config" />
     <None Include="packages.config" />
-    <None Include="secrets.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
+    <None Include="secrets.json" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\Logo 2021.png" />
