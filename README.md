@@ -1,4 +1,5 @@
 # Timesheets Application
+![Timesheet](https://github.com/zkonings/Timesheets-Application/assets/148987384/acb9d9cc-9159-43b9-aa1e-373c91224bef)
 
 ## About This Project:
 
