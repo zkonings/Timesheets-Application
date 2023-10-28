@@ -1,9 +1,10 @@
 # Timesheets Application
-![Timesheet](https://github.com/zkonings/Timesheets-Application/assets/148987384/acb9d9cc-9159-43b9-aa1e-373c91224bef)
 
 ## About This Project:
 
 The Timesheets Application is a tool designed to help your buisness efficiently manage and keep track of your work hours accross multiple applications similtanously. This is done with a windows application that creates and updates a local SQLite database with timesheet information. Then, while the user is connected to the internet, the application will upload that timehsheet information to a secure remote MS SQL server 2014 database that is located on your domain, using APIs. Furthermore, the program is structured to eliminate the chance of loosing, overwriting data or merge conflicts by using GUID's and properly structuring the merge and syncing functions.
+
+![Timesheet](https://github.com/zkonings/Timesheets-Application/assets/148987384/acb9d9cc-9159-43b9-aa1e-373c91224bef)
 
 ## Built With:
 
