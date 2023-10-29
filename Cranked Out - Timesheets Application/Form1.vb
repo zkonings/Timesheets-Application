@@ -1331,7 +1331,9 @@ Public Class Form1
             timeEntry.EmployeeName = employeeNameCb.Text
             timeEntry.Date = DateTimePicker1.Value.Date
 
-            If CheckBoxNoWork.Checked = False Then
+            Dim isNoWork As Boolean = (storeCb1.Text = "No Work" Or storeCb2.Text = "No Work")
+
+            If Not isNoWork Then
                 Dim startTime As TimeSpan = startTimePicker.Value.TimeOfDay
                 Dim formattedStartTime As String = startTime.ToString("hh\:mm") 'removes the milliseconds
                 timeEntry.StartTime = TimeSpan.Parse(formattedStartTime)
@@ -1360,6 +1362,7 @@ Public Class Form1
             MessageBox.Show("An error occurred: " & ex.Message)
         End Try
     End Sub
+
 
 
 

@@ -37,7 +37,6 @@ Partial Class Form1
         Me.endTimePicker = New System.Windows.Forms.DateTimePicker()
         Me.AntonTimesheetBindingSource = New System.Windows.Forms.BindingSource(Me.components)
         Me.refreshDataButton = New System.Windows.Forms.Button()
-        Me.CheckBoxNoWork = New System.Windows.Forms.CheckBox()
         Me.dateLabel = New System.Windows.Forms.Label()
         Me.endTimeLabel = New System.Windows.Forms.Label()
         Me.startTimeLabel = New System.Windows.Forms.Label()
@@ -203,16 +202,6 @@ Partial Class Form1
         Me.refreshDataButton.Text = "Refresh"
         Me.refreshDataButton.UseVisualStyleBackColor = True
         '
-        'CheckBoxNoWork
-        '
-        Me.CheckBoxNoWork.AutoSize = True
-        Me.CheckBoxNoWork.Location = New System.Drawing.Point(43, 135)
-        Me.CheckBoxNoWork.Name = "CheckBoxNoWork"
-        Me.CheckBoxNoWork.Size = New System.Drawing.Size(127, 29)
-        Me.CheckBoxNoWork.TabIndex = 7
-        Me.CheckBoxNoWork.Text = "No Work"
-        Me.CheckBoxNoWork.UseVisualStyleBackColor = True
-        '
         'dateLabel
         '
         Me.dateLabel.AutoSize = True
@@ -341,7 +330,6 @@ Partial Class Form1
         Me.Panel2.Controls.Add(Me.dateDownButton)
         Me.Panel2.Controls.Add(Me.dateUpButton)
         Me.Panel2.Controls.Add(Me.ShowDeletedCheckBox)
-        Me.Panel2.Controls.Add(Me.CheckBoxNoWork)
         Me.Panel2.Controls.Add(Me.nameLabel)
         Me.Panel2.Controls.Add(Me.dateLabel)
         Me.Panel2.Controls.Add(Me.employeeNameCb)
@@ -384,7 +372,7 @@ Partial Class Form1
         'ShowDeletedCheckBox
         '
         Me.ShowDeletedCheckBox.AutoSize = True
-        Me.ShowDeletedCheckBox.Location = New System.Drawing.Point(43, 184)
+        Me.ShowDeletedCheckBox.Location = New System.Drawing.Point(43, 153)
         Me.ShowDeletedCheckBox.Name = "ShowDeletedCheckBox"
         Me.ShowDeletedCheckBox.Size = New System.Drawing.Size(177, 54)
         Me.ShowDeletedCheckBox.TabIndex = 7
@@ -683,7 +671,6 @@ Partial Class Form1
     Friend WithEvents StoreTBindingSource As BindingSource
     Friend WithEvents StoreTBindingSource1 As BindingSource
     Friend WithEvents DirectoryEntry1 As DirectoryServices.DirectoryEntry
-    Friend WithEvents CheckBoxNoWork As CheckBox
     Friend WithEvents TabControl1 As TabControl
     Friend WithEvents TabPage1 As TabPage
     Friend WithEvents Panel2 As Panel
