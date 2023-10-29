@@ -13,6 +13,9 @@ The Timesheets Application is a tool designed to help your buisness efficiently 
 - **Database:** local SQLite, MS SQL Server 2014 (remote secure, accessed by API)
 - **Other Technologies:** Windows userform application
 
+## Basic Workflow:
+![Timesheet API Database Workflow Graph](https://github.com/zkonings/Timesheets-Application/assets/148987384/860bc5ec-1027-4482-b7ee-3c321b73561e)
+
 ## Getting Started:
 
 
