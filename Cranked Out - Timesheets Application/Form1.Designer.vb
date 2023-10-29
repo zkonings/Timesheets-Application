@@ -372,7 +372,7 @@ Partial Class Form1
         'ShowDeletedCheckBox
         '
         Me.ShowDeletedCheckBox.AutoSize = True
-        Me.ShowDeletedCheckBox.Location = New System.Drawing.Point(43, 153)
+        Me.ShowDeletedCheckBox.Location = New System.Drawing.Point(43, 162)
         Me.ShowDeletedCheckBox.Name = "ShowDeletedCheckBox"
         Me.ShowDeletedCheckBox.Size = New System.Drawing.Size(177, 54)
         Me.ShowDeletedCheckBox.TabIndex = 7

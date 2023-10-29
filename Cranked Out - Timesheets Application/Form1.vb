@@ -1569,7 +1569,17 @@ Public Class Form1
             End Using
         End If
     End Sub
+    Private Sub DataGridView1_SelectionChanged(sender As Object, e As EventArgs) Handles DataGridView1.SelectionChanged
+        ' Check if there is at least one selected row in the DataGridView
+        If DataGridView1.SelectedRows.Count > 0 Then
+            ' Assuming the "Date" column is the first column (index 0)
+            Dim selectedRow As DataGridViewRow = DataGridView1.SelectedRows(0)
+            Dim dateValue As Date = CDate(selectedRow.Cells(0).Value)
 
+            ' Set the DateTimePicker1 value to the date from the selected row
+            DateTimePicker1.Value = dateValue
+        End If
+    End Sub
 
 
     'Refresh the DataGridView1
