@@ -16,6 +16,16 @@ The Timesheets Application is a tool designed to help your buisness efficiently 
 ## Basic Workflow:
 ![Timesheet API Database Workflow Graph](https://github.com/zkonings/Timesheets-Application/assets/148987384/860bc5ec-1027-4482-b7ee-3c321b73561e)
 
+## Database:
+The application makes use of SQLite database that is packaged with the program. The application will check to see if a local database has been created and if not, creates one. All changes to data are pushed to the local database as to prevent data loss during wavering connectivity to the internet. From there, a connection to a remote secure MS SQL 2014 database is created using API's and a synchronization process is performed to keep all records up to date.
+
+## Synchronization:
+The local SQLite database stores data with a unique identifier number [GUID] and a timestamp. Depending on the time of the timestamp will depend on if the data is pushed to the remote database or the other way around.
+
+The program checks the GUID and Timestamp for all records on both databases. If a GUID is missing, it gets added to the database. If the GUID exists and has a different timestamp, the databases are updated to have the newest information. 
+
+A "Deleted" column is added to each record of type Boolean, as to keep all records available to view if needed. By default, only records with the value = 0 is shown. However, a check box is available to show previously deleted records.
+
 ## Getting Started:
 
 
