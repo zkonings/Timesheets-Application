@@ -24,7 +24,12 @@ The local SQLite database stores data with a unique identifier number [GUID] and
 
 The program checks the GUID and Timestamp for all records on both databases. If a GUID is missing, it gets added to the database. If the GUID exists and has a different timestamp, the databases are updated to have the newest information. 
 
+##Deleting Records:
 A "Deleted" column is added to each record of type Boolean, as to keep all records available to view if needed. By default, only records with the value = 0 is shown. However, a check box is available to show previously deleted records.
+
+##Backing Up Databases:
+
+
 
 ## Getting Started:
 
