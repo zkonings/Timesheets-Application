@@ -28,7 +28,7 @@ The program checks the GUID and Timestamp for all records on both databases. If 
 A "Deleted" column is added to each record of type Boolean, as to keep all records available to view if needed. By default, only records with the value = 0 is shown. However, a check box is available to show previously deleted records.
 
 ##Backing Up Databases:
-
+Since our remote server uses a third party back-up service for disaster recovery and since all local machines should have a copy of the database that is updated each time they are online, I decided to not include any code to back-up the databases any further.
 
 
 ## Getting Started:
