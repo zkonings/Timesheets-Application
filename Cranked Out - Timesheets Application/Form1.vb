@@ -118,6 +118,10 @@ Public Class Form1
         Public Property LastModifiedUtc As DateTime?
 
 
+        <JsonIgnore>
+        Public Property SyncStatus As String
+
+
     End Class
     Private Async Function LoadTimeSheets() As Task(Of List(Of TimeSheetData))
         Dim timeSheets As New List(Of TimeSheetData)
@@ -369,11 +373,22 @@ Public Class Form1
                 ' Modify the SQL query to filter records by selected EmployeeName and the selected week
                 Dim query As String
                 If ShowDeletedCheckBox.Checked Then
-                    query = "SELECT TimeSheetID, [Employee Name], Location, [Second Location], [Date], [Start Time], [End Time], [Timestamp], [Deleted] FROM TimeSheetT " &
-                          "WHERE [Employee Name] = @EmployeeName AND [Date] >= @StartDate AND [Date] <= @EndDate"
+                    query = "SELECT TimeSheetID, [Employee Name], Location, " &
+        "[Second Location], [Date], [Start Time], [End Time], " &
+        "[Timestamp], [Deleted], SyncStatus " &
+        "FROM TimeSheetT " &
+        "WHERE [Employee Name] = @EmployeeName " &
+        "AND [Date] >= @StartDate " &
+        "AND [Date] <= @EndDate"
                 Else
-                    query = "SELECT TimeSheetID, [Employee Name], Location, [Second Location], [Date], [Start Time], [End Time], [Timestamp], [Deleted] FROM TimeSheetT " &
-                          "WHERE [Employee Name] = @EmployeeName AND [Date] >= @StartDate AND [Date] <= @EndDate AND [Deleted] = 0"
+                    query = "SELECT TimeSheetID, [Employee Name], Location, " &
+        "[Second Location], [Date], [Start Time], [End Time], " &
+        "[Timestamp], [Deleted], SyncStatus " &
+        "FROM TimeSheetT " &
+        "WHERE [Employee Name] = @EmployeeName " &
+        "AND [Date] >= @StartDate " &
+        "AND [Date] <= @EndDate " &
+        "AND [Deleted] = 0"
                 End If
 
                 Using cmd As New SQLiteCommand(query, connection)
@@ -393,6 +408,10 @@ Public Class Form1
                             Dim endTimeStr As String = reader.GetString(6)
                             Dim timestamp As DateTime = reader.GetDateTime(7)
                             Dim Deleted As Integer = reader.GetInt32(8)
+                            Dim syncStatus As String =
+    If(reader.IsDBNull(9),
+       String.Empty,
+       reader.GetString(9))
 
                             ' Convert the parsed date to the desired format
                             Dim [date] As String = dateStr
@@ -410,6 +429,7 @@ Public Class Form1
                             .EndTime = endTime,
                             .Timestamp = timestamp,
                             .Deleted = Deleted,
+                                .SyncStatus = syncStatus,
                             .Distance = CalculateDistance(location, secondLocation, travel1),
                             .DayOfWeek = timestamp.ToString("dddd") ' Calculate the day of the week
                         }
@@ -434,6 +454,9 @@ Public Class Form1
             dataTable.Columns.Add("EndTime", GetType(String))   ' Change the data type to String for formatted time
             dataTable.Columns.Add("Timestamp", GetType(DateTime))
             dataTable.Columns.Add("Deleted", GetType(Integer))
+            dataTable.Columns.Add(
+    "SyncStatus",
+    GetType(String))
             dataTable.Columns.Add("Distance", GetType(Double))
             dataTable.Columns.Add("TimeSheetID", GetType(Guid))
 
@@ -465,6 +488,7 @@ Public Class Form1
                 formattedEndTime,
                 record.Timestamp,
                 record.Deleted,
+                 record.SyncStatus,
                 record.Distance,
                 record.TimeSheetID
             )
@@ -481,7 +505,9 @@ Public Class Form1
             "00:00 AM",
             DateTime.MinValue,
             0,
-            0.0
+            "",
+            0.0,
+            Guid.Empty
         )
                 End If
             Next
@@ -499,6 +525,9 @@ Public Class Form1
             DataGridView1.Columns("SecondLocation").HeaderText = "Second Location"
             DataGridView1.Columns("StartTime").HeaderText = "Start Time"
             DataGridView1.Columns("EndTime").HeaderText = "End Time"
+
+            DataGridView1.Columns("SyncStatus").HeaderText =
+    "Sync Status"
 
             ' Highlight missing days of the week in red
             For Each row As DataGridViewRow In DataGridView1.Rows
@@ -518,6 +547,36 @@ Public Class Form1
                     ' Change the background color of the entire row to yellow
                     row.DefaultCellStyle.BackColor = Color.Yellow
                 End If
+            Next
+
+
+
+            For Each row As DataGridViewRow In DataGridView1.Rows
+                Dim status As String =
+                    Convert.ToString(
+                        row.Cells("SyncStatus").Value)
+
+                Select Case status
+                    Case "Pending"
+                        row.Cells("SyncStatus").Style.ForeColor =
+                            Color.DarkOrange
+
+                    Case "Syncing"
+                        row.Cells("SyncStatus").Style.ForeColor =
+                            Color.Blue
+
+                    Case "Synced", "AlreadySynced"
+                        row.Cells("SyncStatus").Style.ForeColor =
+                            Color.Green
+
+                    Case "Failed"
+                        row.Cells("SyncStatus").Style.ForeColor =
+                            Color.Red
+
+                    Case "Conflict"
+                        row.Cells("SyncStatus").Style.ForeColor =
+                            Color.DarkRed
+                End Select
             Next
 
         Catch ex As Exception
@@ -1784,7 +1843,8 @@ Public Class Form1
                                     SyncStatus TEXT NOT NULL DEFAULT 'Synced',
                                     LastSyncAttemptUtc TEXT NULL,
                                     LastSyncedUtc TEXT NULL,
-                                    SyncError TEXT NULL);"
+                                    SyncError TEXT NULL,
+                                    LastModifiedUtc TEXT NULL));"
                         createTimeSheetTable.ExecuteNonQuery()
                     End Using
 
@@ -1824,6 +1884,11 @@ Public Class Form1
 
         Using connection As New SQLiteConnection(connectionString)
             connection.Open()
+
+            AddColumnIfMissing(
+    connection,
+    "LastModifiedUtc",
+    "TEXT NULL")
 
             AddColumnIfMissing(
             connection,
@@ -1887,82 +1952,191 @@ Public Class Form1
 
 
 
-    Private Sub DataGridView1_CellEndEdit(sender As Object, e As DataGridViewCellEventArgs) Handles DataGridView1.CellEndEdit
-        ' Get the text that is displayed in the column header
-        Dim columnHeaderText As String = DataGridView1.Columns(e.ColumnIndex).HeaderText
+    Private Sub DataGridView1_CellEndEdit(
+    sender As Object,
+    e As DataGridViewCellEventArgs
+) Handles DataGridView1.CellEndEdit
 
-        ' Check if the edited column is one of the columns that you want to update
-        If columnHeaderText = "Employee Name" OrElse columnHeaderText = "Location" OrElse columnHeaderText = "Second Location" OrElse columnHeaderText = "Date" OrElse columnHeaderText = "Start Time" OrElse columnHeaderText = "End Time" Then
-            ' Get the updated value from the cell
-            Dim newValue As Object = DataGridView1.Rows(e.RowIndex).Cells(e.ColumnIndex).Value
+        Dim columnHeaderText As String =
+        DataGridView1.Columns(e.ColumnIndex).HeaderText
 
-            If Not (TypeOf newValue Is TimeSpan) OrElse Not String.IsNullOrEmpty(newValue.ToString()) Then
-                ' Validate and convert the data before updating the SQL Server database
-                If columnHeaderText = "Employee Name" Then
-                    ' Check if the employee name is not empty
-                    If String.IsNullOrEmpty(newValue.ToString()) Then
-                        MessageBox.Show("The employee name cannot be empty")
-                        Return
-                    End If
-                ElseIf columnHeaderText = "Location" OrElse columnHeaderText = "Second Location" Then
-                    ' Check if the location is not empty
-                    If String.IsNullOrEmpty(newValue.ToString()) Then
-                        MessageBox.Show("The location cannot be empty")
-                        Return
-                    End If
-                ElseIf columnHeaderText = "Date" Then
-                    ' Check if the date is in the correct format (yyyy-MM-dd)
-                    Dim regex As New Regex("^\d{4}-\d{2}-\d{2}$")
-                    If Not regex.IsMatch(newValue.ToString()) Then
-                        MessageBox.Show("The date must be in the format yyyy-MM-dd")
-                        Return
-                    End If
-                ElseIf columnHeaderText = "Start Time" OrElse columnHeaderText = "End Time" Then
-                    ' Convert the time to the correct format (HH:mm tt)
-                    If Not String.IsNullOrEmpty(newValue.ToString()) Then
-                        Dim time As DateTime
-                        Dim formats() As String = {"h:mm tt", "hh:mm tt"}
-                        If DateTime.TryParseExact(newValue.ToString(), formats, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, time) Then
-                            newValue = time.ToString("HH:mm tt")
-                        Else
-                            MessageBox.Show("The time must be in the format hh:mm tt")
-                            Return
-                        End If
-                    Else
-                        newValue = DBNull.Value
-                    End If
-                End If
+        Dim editableColumns As New HashSet(Of String)(
+        StringComparer.OrdinalIgnoreCase) From {
+            "Employee Name",
+            "Location",
+            "Second Location",
+            "Date",
+            "Start Time",
+            "End Time"
+        }
+
+        If Not editableColumns.Contains(columnHeaderText) Then
+            Return
+        End If
+
+        Dim newValue As Object =
+        DataGridView1.Rows(e.RowIndex).Cells(
+            e.ColumnIndex).Value
+
+        If newValue Is Nothing OrElse
+       newValue Is DBNull.Value Then
+
+            Return
+        End If
+
+        If columnHeaderText = "Employee Name" AndAlso
+       String.IsNullOrWhiteSpace(newValue.ToString()) Then
+
+            MessageBox.Show(
+            "The employee name cannot be empty.")
+
+            Return
+        End If
+
+        If (columnHeaderText = "Location" OrElse
+        columnHeaderText = "Second Location") AndAlso
+       String.IsNullOrWhiteSpace(newValue.ToString()) Then
+
+            MessageBox.Show(
+            "The location cannot be empty.")
+
+            Return
+        End If
+
+        If columnHeaderText = "Date" Then
+            Dim parsedDate As DateTime
+
+            If Not DateTime.TryParse(
+                newValue.ToString(),
+                parsedDate) Then
+
+                MessageBox.Show(
+                "The date is not valid.")
+
+                Return
             End If
 
-            ' Get the primary key value of the record being updated
-            Dim primaryKeyValue As Object = DataGridView1.Rows(e.RowIndex).Cells("TimeSheetIDDataGridViewTextBoxColumn").Value
+            newValue = parsedDate.Date
+        End If
 
+        If columnHeaderText = "Start Time" OrElse
+       columnHeaderText = "End Time" Then
 
-            ' Define the file path for the SQLite database
-            Dim documentsPath As String = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-            Dim databaseFilePath As String = Path.Combine(documentsPath, "LocalTimesheet.db")
+            Dim parsedTime As DateTime
+            Dim formats() As String = {
+            "h:mm tt",
+            "hh:mm tt",
+            "H:mm",
+            "HH:mm"
+        }
 
-            ' Create the connection string with the database file path
-            Dim connectionString As String = $"Data Source={databaseFilePath};Version=3;"
+            If Not DateTime.TryParseExact(
+                newValue.ToString(),
+                formats,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                parsedTime) Then
 
+                MessageBox.Show(
+                "The time must be in a valid format.")
 
+                Return
+            End If
 
-            ' Create a new SqlConnection object to update the record in the database
-            Using connection As New SqlConnection(connectionString)
+            newValue = parsedTime.ToString("HH:mm")
+        End If
+
+        Dim idValue As Object =
+        DataGridView1.Rows(e.RowIndex).Cells(
+            "TimeSheetID").Value
+
+        If idValue Is Nothing OrElse
+       idValue Is DBNull.Value Then
+
+            MessageBox.Show(
+            "This row does not contain a TimeSheetID.")
+
+            Return
+        End If
+
+        Dim timeSheetID As Guid
+
+        If Not Guid.TryParse(
+            idValue.ToString(),
+            timeSheetID) Then
+
+            MessageBox.Show(
+            "The TimeSheetID is not valid.")
+
+            Return
+        End If
+
+        Dim documentsPath As String =
+        Environment.GetFolderPath(
+            Environment.SpecialFolder.MyDocuments)
+
+        Dim databaseFilePath As String =
+        Path.Combine(
+            documentsPath,
+            "LocalTimesheet.db")
+
+        Dim connectionString As String =
+        $"Data Source={databaseFilePath};Version=3;"
+
+        Dim timestamp As DateTime = DateTime.Now
+
+        Try
+            Using connection As New SQLiteConnection(
+            connectionString)
+
                 connection.Open()
 
-                ' Build the SQL query to update the record
-                Dim query As String = "UPDATE TimeSheetT SET [" & columnHeaderText & "] = @NewValue WHERE TimeSheetID = @PrimaryKeyValue"
+                Dim query As String =
+                "UPDATE TimeSheetT SET " &
+                $"[{columnHeaderText}] = @NewValue, " &
+                "Timestamp = @Timestamp, " &
+                "SyncStatus = 'Pending', " &
+                "LastSyncAttemptUtc = NULL, " &
+                "LastSyncedUtc = NULL, " &
+                "SyncError = NULL " &
+                "WHERE TimeSheetID = @TimeSheetID"
 
-                Using cmd As New SqlCommand(query, connection)
-                    cmd.Parameters.Add("@NewValue", SqlDbType.VarChar).Value = newValue
-                    cmd.Parameters.Add("@PrimaryKeyValue", SqlDbType.Int).Value = primaryKeyValue
+                Using command As New SQLiteCommand(
+                query,
+                connection)
 
-                    ' Execute the query
-                    cmd.ExecuteNonQuery()
+                    command.Parameters.AddWithValue(
+                    "@NewValue",
+                    newValue)
+
+                    command.Parameters.AddWithValue(
+                    "@Timestamp",
+                    timestamp)
+
+                    command.Parameters.AddWithValue(
+                    "@TimeSheetID",
+                    timeSheetID)
+
+                    Dim rowsAffected As Integer =
+                    command.ExecuteNonQuery()
+
+                    If rowsAffected = 0 Then
+                        LogWarning(
+                        "The local timesheet record was not found.",
+                        Color.Red)
+                    Else
+                        LogWarning(
+                        "Local change marked as Pending.",
+                        Color.DarkOrange)
+                    End If
                 End Using
             End Using
-        End If
+        Catch ex As Exception
+            LogWarning(
+            "An error occurred while saving the local edit: " &
+            ex.Message,
+            Color.Red)
+        End Try
     End Sub
     Private Sub DataGridView1_SelectionChanged(sender As Object, e As EventArgs) Handles DataGridView1.SelectionChanged
         ' Check if there is at least one selected row in the DataGridView
