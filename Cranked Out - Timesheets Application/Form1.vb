@@ -155,60 +155,157 @@ Public Class Form1
         ' Return the list of time sheets
         Return timeSheets
     End Function
-    Private Sub InsertDataIntoLocalDatabase(data As List(Of TimeSheetData))
-        ' Define the file path for the SQLite database
-        Dim documentsPath As String = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-        Dim databaseFilePath As String = Path.Combine(documentsPath, "LocalTimesheet.db")
+    Private Sub InsertDataIntoLocalDatabase(
+    data As List(Of TimeSheetData))
 
-        ' Create the connection string with the database file path
-        Dim connectionString As String = $"Data Source={databaseFilePath};Version=3;"
+        Dim documentsPath As String =
+        Environment.GetFolderPath(
+            Environment.SpecialFolder.MyDocuments)
 
-        Dim syncedRecords As Integer = 0
+        Dim databaseFilePath As String =
+        Path.Combine(documentsPath, "LocalTimesheet.db")
+
+        Dim connectionString As String =
+        $"Data Source={databaseFilePath};Version=3;"
 
         Try
             Using connection As New SQLiteConnection(connectionString)
                 connection.Open()
 
                 For Each item As TimeSheetData In data
-                    ' Check if a record with the same TimeSheetID already exists in the database
-                    Dim checkQuery As String = "SELECT Timestamp FROM TimeSheetT WHERE TimeSheetID = @TimeSheetID"
-                    Using checkCmd As New SQLiteCommand(checkQuery, connection)
-                        checkCmd.Parameters.AddWithValue("@TimeSheetID", item.TimeSheetID)
-                        Dim existingTimestamp As Object = checkCmd.ExecuteScalar()
+                    Dim existingStatus As String = Nothing
+                    Dim existingLastModifiedUtc As DateTime? = Nothing
 
-                        If existingTimestamp Is Nothing OrElse (TypeOf existingTimestamp Is DateTime AndAlso DirectCast(existingTimestamp, DateTime) < item.Timestamp) Then
-                            ' Insert or update the record if it doesn't exist or if the Timestamp is newer
-                            Dim query As String = "INSERT OR REPLACE INTO TimeSheetT (TimeSheetID, [Employee Name], Location, [Second Location], [Date], [Start Time], [End Time], Timestamp, Deleted) VALUES (@TimeSheetID, @EmployeeName, @Location, @SecondLocation, @Date, @StartTime, @EndTime, @Timestamp, @Deleted)"
+                    Dim checkQuery As String =
+                    "SELECT SyncStatus, LastModifiedUtc " &
+                    "FROM TimeSheetT " &
+                    "WHERE TimeSheetID = @TimeSheetID"
 
-                            Using cmd As New SQLiteCommand(query, connection)
-                                cmd.Parameters.AddWithValue("@TimeSheetID", item.TimeSheetID)
-                                cmd.Parameters.AddWithValue("@EmployeeName", item.EmployeeName)
-                                cmd.Parameters.AddWithValue("@Location", item.Location)
-                                cmd.Parameters.AddWithValue("@SecondLocation", item.SecondLocation)
-                                cmd.Parameters.AddWithValue("@Date", item.Date)
-                                cmd.Parameters.AddWithValue("@StartTime", item.StartTime)
-                                cmd.Parameters.AddWithValue("@EndTime", item.EndTime)
-                                cmd.Parameters.AddWithValue("@Timestamp", item.Timestamp)
-                                cmd.Parameters.AddWithValue("@Deleted", item.Deleted)
+                    Using checkCommand As New SQLiteCommand(
+                    checkQuery,
+                    connection)
 
-                                ' Execute the query
-                                Dim rowsAffected As Integer = cmd.ExecuteNonQuery()
+                        checkCommand.Parameters.AddWithValue(
+                        "@TimeSheetID",
+                        item.TimeSheetID)
 
-                                ' Check if a record was updated or inserted
-                                If rowsAffected > 0 Then
-                                    syncedRecords += 1
+                        Using reader As SQLiteDataReader =
+                        checkCommand.ExecuteReader()
+
+                            If reader.Read() Then
+                                If Not reader.IsDBNull(0) Then
+                                    existingStatus =
+                                    reader.GetString(0)
                                 End If
-                            End Using
-                        End If
+
+                                If Not reader.IsDBNull(1) Then
+                                    existingLastModifiedUtc =
+                                    reader.GetDateTime(1)
+                                End If
+                            End If
+                        End Using
                     End Using
+
+                    If existingStatus IsNot Nothing AndAlso
+                   (existingStatus = "Pending" OrElse
+                    existingStatus = "Syncing" OrElse
+                    existingStatus = "Failed" OrElse
+                    existingStatus = "Conflict") Then
+
+                        Continue For
+                    End If
+
+                    Dim shouldSave As Boolean =
+                    existingStatus Is Nothing OrElse
+                    Not existingLastModifiedUtc.HasValue OrElse
+                    (item.LastModifiedUtc.HasValue AndAlso
+                     item.LastModifiedUtc.Value >
+                     existingLastModifiedUtc.Value)
+
+                    If shouldSave Then
+                        Dim query As String =
+                        "INSERT OR REPLACE INTO TimeSheetT " &
+                        "(TimeSheetID, [Employee Name], Location, " &
+                        "[Second Location], [Date], [Start Time], " &
+                        "[End Time], [Timestamp], [Deleted], " &
+                        "RowVersion, SyncStatus, LastSyncAttemptUtc, " &
+                        "LastSyncedUtc, SyncError, LastModifiedUtc) " &
+                        "VALUES (@TimeSheetID, @EmployeeName, " &
+                        "@Location, @SecondLocation, @Date, " &
+                        "@StartTime, @EndTime, @Timestamp, @Deleted, " &
+                        "@RowVersion, 'Synced', NULL, @LastSyncedUtc, " &
+                        "NULL, @LastModifiedUtc)"
+
+                        Using command As New SQLiteCommand(
+                        query,
+                        connection)
+
+                            command.Parameters.AddWithValue(
+                            "@TimeSheetID",
+                            item.TimeSheetID)
+
+                            command.Parameters.AddWithValue(
+                            "@EmployeeName",
+                            item.EmployeeName)
+
+                            command.Parameters.AddWithValue(
+                            "@Location",
+                            item.Location)
+
+                            command.Parameters.AddWithValue(
+                            "@SecondLocation",
+                            item.SecondLocation)
+
+                            command.Parameters.AddWithValue(
+                            "@Date",
+                            item.Date)
+
+                            command.Parameters.AddWithValue(
+                            "@StartTime",
+                            item.StartTime)
+
+                            command.Parameters.AddWithValue(
+                            "@EndTime",
+                            item.EndTime)
+
+                            command.Parameters.AddWithValue(
+                            "@Timestamp",
+                            item.Timestamp)
+
+                            command.Parameters.AddWithValue(
+                            "@Deleted",
+                            item.Deleted)
+
+                            command.Parameters.AddWithValue(
+                            "@RowVersion",
+                            If(item.RowVersion Is Nothing,
+                               CType(DBNull.Value, Object),
+                               item.RowVersion))
+
+                            command.Parameters.AddWithValue(
+                            "@LastSyncedUtc",
+                            DateTime.UtcNow)
+
+                            command.Parameters.AddWithValue(
+                            "@LastModifiedUtc",
+                            If(item.LastModifiedUtc.HasValue,
+                               CType(item.LastModifiedUtc.Value, Object),
+                               DBNull.Value))
+
+                            command.ExecuteNonQuery()
+                        End Using
+                    End If
                 Next
             End Using
-            ' Display the number of synced records
-            LogWarning($"Data inserted or updated in the local SQLite database. Synced Records: {syncedRecords}", Color.Green)
         Catch ex As Exception
-            LogWarning("An error occurred while inserting data into the local SQLite database: " & ex.Message, Color.Red)
+            LogWarning(
+            "An error occurred while saving remote timesheet data: " &
+            ex.Message,
+            Color.Red)
         End Try
     End Sub
+
+
     Public Class TimeEntryData
         Public Property TimeSheetID As Guid
 
@@ -1329,61 +1426,115 @@ Public Class Form1
 
 
     'Add Time Record to Database
-    Private Sub AddTimeRecordToLocalDatabase(timeEntry As TimeEntryData)
-        ' Define the file path for the SQLite database
-        Dim documentsPath As String = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-        Dim databaseFilePath As String = Path.Combine(documentsPath, "LocalTimesheet.db")
+    Private Sub AddTimeRecordToLocalDatabase(
+    timeEntry As TimeEntryData)
 
-        ' Create the connection string with the database file path
-        Dim connectionString As String = $"Data Source={databaseFilePath};Version=3;"
+        Dim documentsPath As String =
+        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+
+        Dim databaseFilePath As String =
+        Path.Combine(documentsPath, "LocalTimesheet.db")
+
+        Dim connectionString As String =
+        $"Data Source={databaseFilePath};Version=3;"
 
         Try
+            Dim rowVersionValue As Object = DBNull.Value
+
+            If timeEntry.RowVersion IsNot Nothing Then
+                rowVersionValue = timeEntry.RowVersion
+            End If
+
+            Dim lastModifiedValue As Object = DBNull.Value
+
+            If timeEntry.LastModifiedUtc.HasValue Then
+                lastModifiedValue = timeEntry.LastModifiedUtc.Value
+            End If
+
             Using connection As New SQLiteConnection(connectionString)
                 connection.Open()
 
-                ' Check if a record with the same TimeSheetID already exists in the database
-                Dim checkQuery As String = "SELECT Timestamp FROM TimeSheetT WHERE TimeSheetID = @TimeSheetID"
-                Using checkCmd As New SQLiteCommand(checkQuery, connection)
-                    checkCmd.Parameters.AddWithValue("@TimeSheetID", timeEntry.TimeSheetID)
-                    Dim existingTimestamp As Object = checkCmd.ExecuteScalar()
+                Dim query As String =
+                "INSERT OR REPLACE INTO TimeSheetT " &
+                "(TimeSheetID, [Employee Name], Location, " &
+                "[Second Location], [Date], [Start Time], " &
+                "[End Time], [Timestamp], [Deleted], RowVersion, " &
+                "SyncStatus, LastSyncAttemptUtc, LastSyncedUtc, " &
+                "SyncError, LastModifiedUtc) " &
+                "VALUES (@TimeSheetID, @EmployeeName, @Location, " &
+                "@SecondLocation, @Date, @StartTime, @EndTime, " &
+                "@Timestamp, @Deleted, @RowVersion, 'Pending', " &
+                "NULL, NULL, NULL, @LastModifiedUtc)"
 
-                    If existingTimestamp Is Nothing OrElse (TypeOf existingTimestamp Is DateTime AndAlso DirectCast(existingTimestamp, DateTime) < timeEntry.Timestamp) Then
-                        ' Insert or update the record if it doesn't exist or if the Timestamp is newer
-                        Dim query As String = "INSERT OR REPLACE INTO TimeSheetT (TimeSheetID, [Employee Name], Location, [Second Location], [Date], [Start Time], [End Time], Timestamp, Deleted) VALUES (@TimeSheetID, @EmployeeName, @Location, @SecondLocation, @Date, @StartTime, @EndTime, @Timestamp, @Deleted)"
+                Using command As New SQLiteCommand(query, connection)
+                    command.Parameters.AddWithValue(
+                    "@TimeSheetID",
+                    timeEntry.TimeSheetID)
 
-                        Using cmd As New SQLiteCommand(query, connection)
-                            cmd.Parameters.AddWithValue("@TimeSheetID", timeEntry.TimeSheetID)
-                            cmd.Parameters.AddWithValue("@EmployeeName", timeEntry.EmployeeName)
-                            cmd.Parameters.AddWithValue("@Location", timeEntry.Location)
-                            cmd.Parameters.AddWithValue("@SecondLocation", timeEntry.SecondLocation)
-                            cmd.Parameters.AddWithValue("@Date", timeEntry.Date)
-                            cmd.Parameters.AddWithValue("@StartTime", timeEntry.StartTime)
-                            cmd.Parameters.AddWithValue("@EndTime", timeEntry.EndTime)
-                            cmd.Parameters.AddWithValue("@Timestamp", timeEntry.Timestamp)
-                            cmd.Parameters.AddWithValue("@Deleted", timeEntry.Deleted)
+                    command.Parameters.AddWithValue(
+                    "@EmployeeName",
+                    timeEntry.EmployeeName)
 
-                            ' Execute the query
-                            Dim rowsAffected As Integer = cmd.ExecuteNonQuery()
+                    command.Parameters.AddWithValue(
+                    "@Location",
+                    timeEntry.Location)
 
-                            ' Check if a record was updated or inserted
-                            If rowsAffected > 0 Then
-                                ' Handle success (e.g., refresh the data grid)
-                                LogWarning("Time entry added to the local database", Color.Green)
-                                RefreshData()
-                            Else
-                                ' Handle errors
-                                LogWarning("Failed to add time entry to the local database", Color.Red)
-                            End If
-                        End Using
+                    command.Parameters.AddWithValue(
+                    "@SecondLocation",
+                    timeEntry.SecondLocation)
+
+                    command.Parameters.AddWithValue(
+                    "@Date",
+                    timeEntry.Date)
+
+                    command.Parameters.AddWithValue(
+                    "@StartTime",
+                    timeEntry.StartTime)
+
+                    command.Parameters.AddWithValue(
+                    "@EndTime",
+                    timeEntry.EndTime)
+
+                    command.Parameters.AddWithValue(
+                    "@Timestamp",
+                    timeEntry.Timestamp)
+
+                    command.Parameters.AddWithValue(
+                    "@Deleted",
+                    timeEntry.Deleted)
+
+                    command.Parameters.AddWithValue(
+                    "@RowVersion",
+                    rowVersionValue)
+
+                    command.Parameters.AddWithValue(
+                    "@LastModifiedUtc",
+                    lastModifiedValue)
+
+                    Dim rowsAffected As Integer =
+                    command.ExecuteNonQuery()
+
+                    If rowsAffected > 0 Then
+                        LogWarning(
+                        "Time entry saved locally and marked Pending.",
+                        Color.Green)
+
+                        RefreshData()
+                    Else
+                        LogWarning(
+                        "Failed to save the time entry locally.",
+                        Color.Red)
                     End If
                 End Using
             End Using
         Catch ex As Exception
-            ' Log the exception and show an error message
-            Console.WriteLine("Error: " & ex.Message)
-            MessageBox.Show("An error occurred: " & ex.Message)
+            LogWarning(
+            "An error occurred while saving the local time entry: " &
+            ex.Message,
+            Color.Red)
         End Try
     End Sub
+
     Private Sub addTimeButton_Click(sender As Object, e As EventArgs) Handles addTimeButton.Click
 
         ' Get the selected name from the ComboBox
@@ -1568,8 +1719,13 @@ Public Class Form1
                 connection.Open()
 
                 ' Define the update query
-                Dim updateQuery As String = "UPDATE TimeSheetT SET Deleted = 1, Timestamp = @Timestamp WHERE TimeSheetID = @TimeSheetID"
-
+                Dim updateQuery As String =
+    "UPDATE TimeSheetT SET " &
+    "Deleted = 1, " &
+    "Timestamp = @Timestamp, " &
+    "SyncStatus = 'Pending', " &
+    "SyncError = NULL " &
+    "WHERE TimeSheetID = @TimeSheetID"
 
                 Using cmd As New SQLiteCommand(updateQuery, connection)
                     cmd.Parameters.AddWithValue("@TimeSheetID", selectedRowID)
