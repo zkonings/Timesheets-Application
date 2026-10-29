@@ -52,6 +52,8 @@ Public Class Form1
         Me.Enabled = False
 
         Dim databaseCreated As Boolean = CreateDatabaseIfNotExists()
+
+        AddSyncColumnsIfMissing()
         '    NewConfigure() ' remove comment froom this line to use secrets.json file
         apiKey = "YOUR_GENERATED_API_KEY"
         baseApiUrl = "https://www.crankedout.ca/"
@@ -111,6 +113,9 @@ Public Class Form1
         Public Property Timestamp As DateTime
 
         Public Property Deleted As Integer
+
+        Public Property RowVersion As Byte()
+        Public Property LastModifiedUtc As DateTime?
 
 
     End Class
@@ -224,6 +229,21 @@ Public Class Form1
         Public Property Timestamp As DateTime
 
         Public Property Deleted As Integer
+
+        Public Property RowVersion As Byte()
+        Public Property LastModifiedUtc As DateTime?
+
+        <JsonIgnore>
+        Public Property SyncStatus As String
+
+        <JsonIgnore>
+        Public Property LastSyncAttemptUtc As DateTime?
+
+        <JsonIgnore>
+        Public Property LastSyncedUtc As DateTime?
+
+        <JsonIgnore>
+        Public Property SyncError As String
 
 
     End Class
@@ -1603,13 +1623,18 @@ Public Class Form1
                                         [Start Time] TIME,
                                         [End Time] TIME,
                                         [Timestamp] DATETIME,
-                                        Deleted INTEGER DEFAULT 0);"
+                                        Deleted INTEGER DEFAULT 0,
+                                    RowVersion BLOB NULL,
+                                    SyncStatus TEXT NOT NULL DEFAULT 'Synced',
+                                    LastSyncAttemptUtc TEXT NULL,
+                                    LastSyncedUtc TEXT NULL,
+                                    SyncError TEXT NULL);"
                         createTimeSheetTable.ExecuteNonQuery()
                     End Using
 
                     ' Create the TravelT table with the specified properties.
                     Using createTravelTable As New SQLiteCommand(connection)
-                        createTravelTable.CommandText = "CREATE TABLE IF NOT EXISTS TravelT (
+                        createTravelTable.CommandText = "CREATE TABLE IF Not EXISTS TravelT (
                                         ID INTEGER PRIMARY KEY AUTOINCREMENT,
                                         [Store Start] TEXT,
                                         [Store End] TEXT,
@@ -1627,6 +1652,82 @@ Public Class Form1
 
         Return True
     End Function
+
+
+
+    Private Sub AddSyncColumnsIfMissing()
+        Dim documentsPath As String =
+        Environment.GetFolderPath(
+            Environment.SpecialFolder.MyDocuments)
+
+        Dim databaseFilePath As String =
+        Path.Combine(documentsPath, "LocalTimesheet.db")
+
+        Dim connectionString As String =
+        $"Data Source={databaseFilePath};Version=3;"
+
+        Using connection As New SQLiteConnection(connectionString)
+            connection.Open()
+
+            AddColumnIfMissing(
+            connection,
+            "RowVersion",
+            "BLOB NULL")
+
+            AddColumnIfMissing(
+            connection,
+            "SyncStatus",
+            "TEXT NOT NULL DEFAULT 'Synced'")
+
+            AddColumnIfMissing(
+            connection,
+            "LastSyncAttemptUtc",
+            "TEXT NULL")
+
+            AddColumnIfMissing(
+            connection,
+            "LastSyncedUtc",
+            "TEXT NULL")
+
+            AddColumnIfMissing(
+            connection,
+            "SyncError",
+            "TEXT NULL")
+        End Using
+    End Sub
+
+    Private Sub AddColumnIfMissing(
+    connection As SQLiteConnection,
+    columnName As String,
+    columnDefinition As String)
+
+        Dim query As String =
+        "SELECT COUNT(*) " &
+        "FROM pragma_table_info('TimeSheetT') " &
+        "WHERE name = @ColumnName"
+
+        Using command As New SQLiteCommand(query, connection)
+            command.Parameters.AddWithValue(
+            "@ColumnName",
+            columnName)
+
+            Dim columnExists As Integer =
+            Convert.ToInt32(command.ExecuteScalar())
+
+            If columnExists = 0 Then
+                Dim alterQuery As String =
+                $"ALTER TABLE TimeSheetT " &
+                $"ADD COLUMN [{columnName}] {columnDefinition}"
+
+                Using alterCommand As New SQLiteCommand(
+                alterQuery,
+                connection)
+
+                    alterCommand.ExecuteNonQuery()
+                End Using
+            End If
+        End Using
+    End Sub
 
 
 
