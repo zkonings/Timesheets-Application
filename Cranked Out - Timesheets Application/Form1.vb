@@ -12,6 +12,8 @@ Imports System.Security.Cryptography.X509Certificates
 Imports System.Text
 Imports System.Net.NetworkInformation
 Imports Microsoft.Extensions.Configuration
+Imports System.ComponentModel
+
 
 Public Class Form1
 
@@ -28,7 +30,9 @@ Public Class Form1
         Dim builder As New ConfigurationBuilder()
 
         ' Set the base path for the configuration file
-        builder.SetBasePath(Directory.GetCurrentDirectory())
+        builder.SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+
+        ' builder.SetBasePath(Directory.GetCurrentDirectory())
 
         ' Add the secrets.json file to the configuration
         builder.AddJsonFile("secrets.json")
@@ -48,7 +52,9 @@ Public Class Form1
         Me.Enabled = False
 
         Dim databaseCreated As Boolean = CreateDatabaseIfNotExists()
-        NewConfigure()
+        '    NewConfigure() ' remove comment froom this line to use secrets.json file
+        apiKey = "YOUR_GENERATED_API_KEY"
+        baseApiUrl = "https://www.crankedout.ca/"
 
         If IsInternetConnected() Then ' The machine is connected to the internet, so you can run procedures that require internet access.
 
@@ -386,6 +392,14 @@ Public Class Form1
                     For Each cell As DataGridViewCell In row.Cells
                         cell.Style.BackColor = Color.Red ' Set the font color to red
                     Next
+                End If
+            Next
+            ' Highlight records where "Deleted" = 1 in yellow
+            For Each row As DataGridViewRow In DataGridView1.Rows
+                Dim deletedValue As Integer
+                If Integer.TryParse(row.Cells("Deleted").Value.ToString(), deletedValue) AndAlso deletedValue = 1 Then
+                    ' Change the background color of the entire row to yellow
+                    row.DefaultCellStyle.BackColor = Color.Yellow
                 End If
             Next
 
@@ -762,6 +776,7 @@ Public Class Form1
         Dim documentsPath As String = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
         Dim databaseFilePath As String = Path.Combine(documentsPath, "LocalTimesheet.db")
 
+        Dim currentEmployee As String = employeeNameCb.Text
         Dim employees As New List(Of EmployeeData)
 
         Try
@@ -786,6 +801,8 @@ Public Class Form1
         End Try
         employeeNameCb.DataSource = employees
         employeeNameCb.DisplayMember = "EmployeeName"
+        employeeNameCb.Text = currentEmployee
+
         Return employees
     End Function
     Private Sub SaveEmployeeDataToDatabase(employees As List(Of EmployeeData))
@@ -848,6 +865,36 @@ Public Class Form1
             End Using
         Catch ex As Exception
             MessageBox.Show("An error occurred while saving data to the local database: " & ex.Message)
+        End Try
+    End Sub
+    Private Sub addEmployee(employeeName As String)
+        Dim documentsPath As String = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+        Dim databaseFilePath As String = Path.Combine(documentsPath, "LocalTimesheet.db")
+
+        Try
+            Dim connectionString As String = $"Data Source={databaseFilePath};Version=3;"
+            Using connection As New SQLiteConnection(connectionString)
+                connection.Open()
+
+                ' Insert a new record for the employee
+                Dim insertQuery As String = "INSERT INTO EmployeeT ([Employee Name]) VALUES (@EmployeeName)"
+                Using insertCmd As New SQLiteCommand(insertQuery, connection)
+                    insertCmd.Parameters.AddWithValue("@EmployeeName", employeeName)
+                    insertCmd.ExecuteNonQuery()
+                End Using
+            End Using
+
+
+            RefreshData()
+            employeeNameCb.DataSource = LoadEmployeeDataFromDatabase().Result
+            employeeNameCb.DisplayMember = "EmployeeName"
+            employeeNameCb.Text = employeeName
+
+
+            LogWarning("New employee name was added to the local database. Please note that the manager in charge of the databases, must add the employee to the remote database for this employee to show on all devices", Color.Green)
+
+        Catch ex As Exception
+            LogWarning("An error occurred while adding the employee to the local database: " & ex.Message, Color.Green)
         End Try
     End Sub
 
@@ -1318,6 +1365,39 @@ Public Class Form1
         End Try
     End Sub
     Private Sub addTimeButton_Click(sender As Object, e As EventArgs) Handles addTimeButton.Click
+
+        ' Get the selected name from the ComboBox
+        Dim selectedName As String = employeeNameCb.Text
+
+        ' Get the list of EmployeeData from the LoadEmployeeDataFromDatabase function
+        Dim employees As List(Of EmployeeData) = LoadEmployeeDataFromDatabase().Result
+
+        ' Check if the selected name is in the list of employees
+        Dim foundEmployee As EmployeeData = employees.Find(Function(emp) emp.EmployeeName = selectedName)
+
+        If String.IsNullOrEmpty(selectedName) Then
+            MessageBox.Show("Please enter an employee into the 'Employee Name' field")
+            LogWarning("Please enter an employee into the 'Employee Name' field", Color.Red)
+        ElseIf foundEmployee Is Nothing Then
+            Dim result As DialogResult = MessageBox.Show("The selected employee name does not exist in the dataset. Do you want to add the employee?", "Add Employee", MessageBoxButtons.YesNo)
+
+            If result = DialogResult.Yes Then
+                ' Call the function to add the employee
+                addEmployee(selectedName)
+
+                ' Continue with the code
+                ' Add any further actions you want to perform after adding the employee
+            Else
+                ' User chose not to add the employee, so you can prevent further execution
+                LogWarning("New employee was not added to local database.", Color.Red)
+                Return
+            End If
+        Else
+            ' The selected employee exists in the dataset
+            ' You can perform further actions here
+        End If
+
+
         Try
             ' Create a model class for your time entry data
             Dim timeEntry As New TimeEntryData()
@@ -1328,10 +1408,24 @@ Public Class Form1
             timeEntry.Deleted = 0
 
             ' Populate the time entry object with the form data
-            timeEntry.EmployeeName = employeeNameCb.Text
+            timeEntry.EmployeeName = selectedName
             timeEntry.Date = DateTimePicker1.Value.Date
 
-            Dim isNoWork As Boolean = (storeCb1.Text = "No Work" Or storeCb2.Text = "No Work")
+
+
+            ' Check if a record already exists on this date
+            Dim timeEntryDate As Date = DateTimePicker1.Value.Date
+            ' Perform a query to check if a record with the same date and employee name already exists
+            Dim recordAlreadyExists As Boolean = CheckIfRecordExists(timeEntryDate, selectedName)
+
+            If recordAlreadyExists Then
+                MessageBox.Show("A record with the same date and employee name already exists. Please delete the current record before re-submiting record, if you need to update information.")
+                LogWarning("A record with the same date and employee name already exists. Please delete the current record before re-submiting record, if you need to update information.", Color.Red)
+                Return
+            End If
+
+
+            Dim isNoWork As Boolean = (storeCb1.Text = "No Work" Or storeCb2.Text = "No Work" Or storeCb1.Text = "" And storeCb2.Text = "")
 
             If Not isNoWork Then
                 Dim startTime As TimeSpan = startTimePicker.Value.TimeOfDay
@@ -1345,11 +1439,24 @@ Public Class Form1
                 timeEntry.Location = storeCb1.Text
                 timeEntry.SecondLocation = storeCb2.Text
             Else
-                timeEntry.StartTime = TimeSpan.Parse("00:00:00")
-                timeEntry.EndTime = TimeSpan.Parse("00:00:00")
-                timeEntry.Location = "No Work"
-                timeEntry.SecondLocation = ""
+
+                Dim result As DialogResult = MessageBox.Show("No location was selected for this record. Was there no work on this day?", "No Work", MessageBoxButtons.YesNo)
+                If result = DialogResult.Yes Then
+                    ' Call the function 
+                    timeEntry.StartTime = TimeSpan.Parse("00:00:00")
+                    timeEntry.EndTime = TimeSpan.Parse("00:00:00")
+                    timeEntry.Location = "No Work"
+                    timeEntry.SecondLocation = ""
+                    LogWarning("Record recorded as 'No Work'.", Color.Green)
+
+                Else
+                    ' User chose not to add the employee, so you can prevent further execution
+                    LogWarning("Record not added to database. Please select a location for the work performed.", Color.Red)
+                    Return
+                End If
             End If
+
+
 
             ' Set the Timestamp property to the current date and time
             timeEntry.Timestamp = DateTime.Now
@@ -1362,6 +1469,37 @@ Public Class Form1
             MessageBox.Show("An error occurred: " & ex.Message)
         End Try
     End Sub
+    ' Function to check if a record with the same date and employee name already exists
+    Private Function CheckIfRecordExists([date] As Date, employeeName As String) As Boolean
+        ' Define the file path for the SQLite database
+        Dim documentsPath As String = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+        Dim databaseFilePath As String = Path.Combine(documentsPath, "LocalTimesheet.db")
+
+        ' Create the connection string with the database file path
+        Dim connectionString As String = $"Data Source={databaseFilePath};Version=3;"
+
+        Try
+            Using connection As New SQLiteConnection(connectionString)
+                connection.Open()
+
+                ' Check if a record with the same date and employee name already exists in the database
+                Dim query As String = "SELECT COUNT(*) FROM TimeSheetT WHERE [Date] = @Date AND [Employee Name] = @EmployeeName And Deleted = 0"
+                Using command As New SQLiteCommand(query, connection)
+                    command.Parameters.AddWithValue("@Date", [date])
+                    command.Parameters.AddWithValue("@EmployeeName", employeeName)
+
+                    Dim count As Integer = Convert.ToInt32(command.ExecuteScalar())
+                    Return count > 0
+                End Using
+            End Using
+        Catch ex As Exception
+            ' Log the exception and show an error message
+            Console.WriteLine("Error: " & ex.Message)
+            MessageBox.Show("An error occurred: " & ex.Message)
+            ' Handle the exception in an appropriate way for your application
+            Return False ' Indicate an error occurred
+        End Try
+    End Function
 
 
 
@@ -1385,7 +1523,7 @@ Public Class Form1
                 LogWarning("Record marked as deleted successfully", Color.Green)
                 RefreshData()
             Else
-                MessageBox.Show("Please select a row to mark as deleted.")
+                MessageBox.Show("Please select a row to mark as deleted. Double click the blank box that is located next to the record you would like to delete.")
             End If
         Catch ex As Exception
             ' Log the exception and show an error message
@@ -1667,6 +1805,19 @@ Public Class Form1
         WarningLogRichTextBox.SelectionStart = WarningLogRichTextBox.TextLength
         WarningLogRichTextBox.ScrollToCaret()
     End Sub
+
+    Private Sub ShowDeletedCheckBox_CheckedChanged(sender As Object, e As EventArgs) Handles ShowDeletedCheckBox.CheckedChanged
+        RefreshData()
+    End Sub
+
+    Private Sub clearButton_Click(sender As Object, e As EventArgs) Handles clearButton.Click
+        storeCb2.Text = String.Empty
+    End Sub
+
+    Private Sub addEmployeeButton_Click(sender As Object, e As EventArgs)
+        addEmployee(employeeNameCb.Text)
+    End Sub
+
 
 
 

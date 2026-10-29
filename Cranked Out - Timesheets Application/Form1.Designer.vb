@@ -22,20 +22,16 @@ Partial Class Form1
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()>
     Private Sub InitializeComponent()
-        Me.components = New System.ComponentModel.Container()
         Dim DataGridViewCellStyle1 As System.Windows.Forms.DataGridViewCellStyle = New System.Windows.Forms.DataGridViewCellStyle()
         Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(Form1))
         Me.DataGridView1 = New System.Windows.Forms.DataGridView()
-        Me.TimeSheetTBindingSource = New System.Windows.Forms.BindingSource(Me.components)
         Me.deleteRecordButton = New System.Windows.Forms.Button()
         Me.addTimeButton = New System.Windows.Forms.Button()
         Me.employeeNameCb = New System.Windows.Forms.ComboBox()
-        Me.EmployeeTBindingSource = New System.Windows.Forms.BindingSource(Me.components)
         Me.DateTimePicker1 = New System.Windows.Forms.DateTimePicker()
         Me.logoPictureBox = New System.Windows.Forms.PictureBox()
         Me.startTimePicker = New System.Windows.Forms.DateTimePicker()
         Me.endTimePicker = New System.Windows.Forms.DateTimePicker()
-        Me.AntonTimesheetBindingSource = New System.Windows.Forms.BindingSource(Me.components)
         Me.refreshDataButton = New System.Windows.Forms.Button()
         Me.dateLabel = New System.Windows.Forms.Label()
         Me.endTimeLabel = New System.Windows.Forms.Label()
@@ -45,13 +41,11 @@ Partial Class Form1
         Me.nameLabel = New System.Windows.Forms.Label()
         Me.storeCb2 = New System.Windows.Forms.ComboBox()
         Me.storeCb1 = New System.Windows.Forms.ComboBox()
-        Me.StoreTBindingSource = New System.Windows.Forms.BindingSource(Me.components)
-        Me.TravelTBindingSource = New System.Windows.Forms.BindingSource(Me.components)
-        Me.DirectoryEntry1 = New System.DirectoryServices.DirectoryEntry()
         Me.TabControl1 = New System.Windows.Forms.TabControl()
         Me.TabPage1 = New System.Windows.Forms.TabPage()
         Me.WarningLogRichTextBox = New System.Windows.Forms.RichTextBox()
         Me.Panel2 = New System.Windows.Forms.Panel()
+        Me.clearButton = New System.Windows.Forms.Button()
         Me.dateDownButton = New System.Windows.Forms.Button()
         Me.dateUpButton = New System.Windows.Forms.Button()
         Me.ShowDeletedCheckBox = New System.Windows.Forms.CheckBox()
@@ -69,7 +63,7 @@ Partial Class Form1
         Me.PictureBox1 = New System.Windows.Forms.PictureBox()
         Me.Button1 = New System.Windows.Forms.Button()
         Me.Panel3 = New System.Windows.Forms.Panel()
-        Me.ComboBox2 = New System.Windows.Forms.ComboBox()
+        Me.ComboBox3 = New System.Windows.Forms.ComboBox()
         Me.Label4 = New System.Windows.Forms.Label()
         Me.Label2 = New System.Windows.Forms.Label()
         Me.RadioButton1 = New System.Windows.Forms.RadioButton()
@@ -78,12 +72,7 @@ Partial Class Form1
         Me.DateTimePicker2 = New System.Windows.Forms.DateTimePicker()
         Me.TextBox1 = New System.Windows.Forms.TextBox()
         CType(Me.DataGridView1, System.ComponentModel.ISupportInitialize).BeginInit()
-        CType(Me.TimeSheetTBindingSource, System.ComponentModel.ISupportInitialize).BeginInit()
-        CType(Me.EmployeeTBindingSource, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.logoPictureBox, System.ComponentModel.ISupportInitialize).BeginInit()
-        CType(Me.AntonTimesheetBindingSource, System.ComponentModel.ISupportInitialize).BeginInit()
-        CType(Me.StoreTBindingSource, System.ComponentModel.ISupportInitialize).BeginInit()
-        CType(Me.TravelTBindingSource, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.TabControl1.SuspendLayout()
         Me.TabPage1.SuspendLayout()
         Me.Panel2.SuspendLayout()
@@ -102,9 +91,11 @@ Partial Class Form1
         DataGridViewCellStyle1.SelectionBackColor = System.Drawing.SystemColors.Highlight
         Me.DataGridView1.AlternatingRowsDefaultCellStyle = DataGridViewCellStyle1
         Me.DataGridView1.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize
+        Me.DataGridView1.Cursor = System.Windows.Forms.Cursors.Hand
         Me.DataGridView1.Location = New System.Drawing.Point(8, 282)
         Me.DataGridView1.Margin = New System.Windows.Forms.Padding(4)
         Me.DataGridView1.Name = "DataGridView1"
+        Me.DataGridView1.ReadOnly = True
         Me.DataGridView1.RowHeadersWidth = 62
         Me.DataGridView1.RowTemplate.Height = 28
         Me.DataGridView1.Size = New System.Drawing.Size(2327, 504)
@@ -112,7 +103,7 @@ Partial Class Form1
         '
         'deleteRecordButton
         '
-        Me.deleteRecordButton.Location = New System.Drawing.Point(1834, 153)
+        Me.deleteRecordButton.Location = New System.Drawing.Point(1864, 153)
         Me.deleteRecordButton.Margin = New System.Windows.Forms.Padding(4)
         Me.deleteRecordButton.Name = "deleteRecordButton"
         Me.deleteRecordButton.Size = New System.Drawing.Size(205, 72)
@@ -122,7 +113,7 @@ Partial Class Form1
         '
         'addTimeButton
         '
-        Me.addTimeButton.Location = New System.Drawing.Point(1562, 153)
+        Me.addTimeButton.Location = New System.Drawing.Point(1592, 153)
         Me.addTimeButton.Margin = New System.Windows.Forms.Padding(4)
         Me.addTimeButton.Name = "addTimeButton"
         Me.addTimeButton.Size = New System.Drawing.Size(205, 72)
@@ -137,7 +128,7 @@ Partial Class Form1
         Me.employeeNameCb.Font = New System.Drawing.Font("Microsoft Sans Serif", 18.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
         Me.employeeNameCb.FormattingEnabled = True
         Me.employeeNameCb.ItemHeight = 55
-        Me.employeeNameCb.Location = New System.Drawing.Point(291, 43)
+        Me.employeeNameCb.Location = New System.Drawing.Point(321, 43)
         Me.employeeNameCb.Margin = New System.Windows.Forms.Padding(4)
         Me.employeeNameCb.Name = "employeeNameCb"
         Me.employeeNameCb.Size = New System.Drawing.Size(606, 63)
@@ -147,7 +138,7 @@ Partial Class Form1
         '
         Me.DateTimePicker1.CalendarFont = New System.Drawing.Font("Microsoft Sans Serif", 18.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
         Me.DateTimePicker1.Font = New System.Drawing.Font("Microsoft Sans Serif", 18.0!)
-        Me.DateTimePicker1.Location = New System.Drawing.Point(929, 163)
+        Me.DateTimePicker1.Location = New System.Drawing.Point(959, 163)
         Me.DateTimePicker1.Margin = New System.Windows.Forms.Padding(4)
         Me.DateTimePicker1.Name = "DateTimePicker1"
         Me.DateTimePicker1.Size = New System.Drawing.Size(478, 62)
@@ -156,10 +147,10 @@ Partial Class Form1
         'logoPictureBox
         '
         Me.logoPictureBox.Image = Global.Cranked_Out___Timesheets_Application.My.Resources.Resources.Logo_2021
-        Me.logoPictureBox.Location = New System.Drawing.Point(43, 10)
+        Me.logoPictureBox.Location = New System.Drawing.Point(19, 10)
         Me.logoPictureBox.Margin = New System.Windows.Forms.Padding(4)
         Me.logoPictureBox.Name = "logoPictureBox"
-        Me.logoPictureBox.Size = New System.Drawing.Size(124, 105)
+        Me.logoPictureBox.Size = New System.Drawing.Size(276, 221)
         Me.logoPictureBox.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom
         Me.logoPictureBox.TabIndex = 4
         Me.logoPictureBox.TabStop = False
@@ -169,7 +160,7 @@ Partial Class Form1
         Me.startTimePicker.CustomFormat = "hh:mm tt"
         Me.startTimePicker.Font = New System.Drawing.Font("Microsoft Sans Serif", 20.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
         Me.startTimePicker.Format = System.Windows.Forms.DateTimePickerFormat.Custom
-        Me.startTimePicker.Location = New System.Drawing.Point(291, 163)
+        Me.startTimePicker.Location = New System.Drawing.Point(321, 163)
         Me.startTimePicker.Margin = New System.Windows.Forms.Padding(4)
         Me.startTimePicker.Name = "startTimePicker"
         Me.startTimePicker.RightToLeft = System.Windows.Forms.RightToLeft.No
@@ -183,7 +174,7 @@ Partial Class Form1
         Me.endTimePicker.CustomFormat = "hh:mm tt"
         Me.endTimePicker.Font = New System.Drawing.Font("Microsoft Sans Serif", 20.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
         Me.endTimePicker.Format = System.Windows.Forms.DateTimePickerFormat.Custom
-        Me.endTimePicker.Location = New System.Drawing.Point(618, 163)
+        Me.endTimePicker.Location = New System.Drawing.Point(648, 163)
         Me.endTimePicker.Margin = New System.Windows.Forms.Padding(4)
         Me.endTimePicker.Name = "endTimePicker"
         Me.endTimePicker.RightToLeft = System.Windows.Forms.RightToLeft.No
@@ -194,7 +185,7 @@ Partial Class Form1
         '
         'refreshDataButton
         '
-        Me.refreshDataButton.Location = New System.Drawing.Point(1834, 34)
+        Me.refreshDataButton.Location = New System.Drawing.Point(1864, 34)
         Me.refreshDataButton.Margin = New System.Windows.Forms.Padding(4)
         Me.refreshDataButton.Name = "refreshDataButton"
         Me.refreshDataButton.Size = New System.Drawing.Size(205, 72)
@@ -205,7 +196,7 @@ Partial Class Form1
         'dateLabel
         '
         Me.dateLabel.AutoSize = True
-        Me.dateLabel.Location = New System.Drawing.Point(924, 135)
+        Me.dateLabel.Location = New System.Drawing.Point(954, 135)
         Me.dateLabel.Margin = New System.Windows.Forms.Padding(4, 0, 4, 0)
         Me.dateLabel.Name = "dateLabel"
         Me.dateLabel.Size = New System.Drawing.Size(63, 25)
@@ -215,7 +206,7 @@ Partial Class Form1
         'endTimeLabel
         '
         Me.endTimeLabel.AutoSize = True
-        Me.endTimeLabel.Location = New System.Drawing.Point(613, 135)
+        Me.endTimeLabel.Location = New System.Drawing.Point(643, 135)
         Me.endTimeLabel.Margin = New System.Windows.Forms.Padding(4, 0, 4, 0)
         Me.endTimeLabel.Name = "endTimeLabel"
         Me.endTimeLabel.Size = New System.Drawing.Size(109, 25)
@@ -225,7 +216,7 @@ Partial Class Form1
         'startTimeLabel
         '
         Me.startTimeLabel.AutoSize = True
-        Me.startTimeLabel.Location = New System.Drawing.Point(292, 135)
+        Me.startTimeLabel.Location = New System.Drawing.Point(322, 135)
         Me.startTimeLabel.Margin = New System.Windows.Forms.Padding(4, 0, 4, 0)
         Me.startTimeLabel.Name = "startTimeLabel"
         Me.startTimeLabel.Size = New System.Drawing.Size(116, 25)
@@ -235,7 +226,7 @@ Partial Class Form1
         'storeLabel2
         '
         Me.storeLabel2.AutoSize = True
-        Me.storeLabel2.Location = New System.Drawing.Point(1360, 10)
+        Me.storeLabel2.Location = New System.Drawing.Point(1390, 10)
         Me.storeLabel2.Margin = New System.Windows.Forms.Padding(4, 0, 4, 0)
         Me.storeLabel2.Name = "storeLabel2"
         Me.storeLabel2.Size = New System.Drawing.Size(148, 25)
@@ -245,7 +236,7 @@ Partial Class Form1
         'storeLabel1
         '
         Me.storeLabel1.AutoSize = True
-        Me.storeLabel1.Location = New System.Drawing.Point(924, 10)
+        Me.storeLabel1.Location = New System.Drawing.Point(954, 10)
         Me.storeLabel1.Margin = New System.Windows.Forms.Padding(4, 0, 4, 0)
         Me.storeLabel1.Name = "storeLabel1"
         Me.storeLabel1.Size = New System.Drawing.Size(117, 25)
@@ -255,7 +246,7 @@ Partial Class Form1
         'nameLabel
         '
         Me.nameLabel.AutoSize = True
-        Me.nameLabel.Location = New System.Drawing.Point(292, 10)
+        Me.nameLabel.Location = New System.Drawing.Point(322, 10)
         Me.nameLabel.Margin = New System.Windows.Forms.Padding(4, 0, 4, 0)
         Me.nameLabel.Name = "nameLabel"
         Me.nameLabel.Size = New System.Drawing.Size(175, 25)
@@ -270,7 +261,7 @@ Partial Class Form1
         Me.storeCb2.Font = New System.Drawing.Font("Microsoft Sans Serif", 18.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
         Me.storeCb2.FormattingEnabled = True
         Me.storeCb2.ItemHeight = 55
-        Me.storeCb2.Location = New System.Drawing.Point(1365, 43)
+        Me.storeCb2.Location = New System.Drawing.Point(1395, 43)
         Me.storeCb2.Margin = New System.Windows.Forms.Padding(4)
         Me.storeCb2.Name = "storeCb2"
         Me.storeCb2.Size = New System.Drawing.Size(402, 63)
@@ -285,7 +276,7 @@ Partial Class Form1
         Me.storeCb1.Font = New System.Drawing.Font("Microsoft Sans Serif", 18.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
         Me.storeCb1.FormattingEnabled = True
         Me.storeCb1.ItemHeight = 55
-        Me.storeCb1.Location = New System.Drawing.Point(929, 43)
+        Me.storeCb1.Location = New System.Drawing.Point(959, 43)
         Me.storeCb1.Margin = New System.Windows.Forms.Padding(4)
         Me.storeCb1.MaxDropDownItems = 12
         Me.storeCb1.Name = "storeCb1"
@@ -327,6 +318,7 @@ Partial Class Form1
         'Panel2
         '
         Me.Panel2.BackColor = System.Drawing.Color.White
+        Me.Panel2.Controls.Add(Me.clearButton)
         Me.Panel2.Controls.Add(Me.dateDownButton)
         Me.Panel2.Controls.Add(Me.dateUpButton)
         Me.Panel2.Controls.Add(Me.ShowDeletedCheckBox)
@@ -351,9 +343,19 @@ Partial Class Form1
         Me.Panel2.Size = New System.Drawing.Size(2327, 269)
         Me.Panel2.TabIndex = 1
         '
+        'clearButton
+        '
+        Me.clearButton.Font = New System.Drawing.Font("Microsoft Sans Serif", 7.125!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.clearButton.Location = New System.Drawing.Point(1704, 0)
+        Me.clearButton.Name = "clearButton"
+        Me.clearButton.Size = New System.Drawing.Size(93, 42)
+        Me.clearButton.TabIndex = 13
+        Me.clearButton.Text = "Clear"
+        Me.clearButton.UseVisualStyleBackColor = True
+        '
         'dateDownButton
         '
-        Me.dateDownButton.Location = New System.Drawing.Point(1471, 163)
+        Me.dateDownButton.Location = New System.Drawing.Point(1501, 163)
         Me.dateDownButton.Name = "dateDownButton"
         Me.dateDownButton.Size = New System.Drawing.Size(45, 68)
         Me.dateDownButton.TabIndex = 9
@@ -362,7 +364,7 @@ Partial Class Form1
         '
         'dateUpButton
         '
-        Me.dateUpButton.Location = New System.Drawing.Point(1420, 162)
+        Me.dateUpButton.Location = New System.Drawing.Point(1450, 162)
         Me.dateUpButton.Name = "dateUpButton"
         Me.dateUpButton.Size = New System.Drawing.Size(45, 69)
         Me.dateUpButton.TabIndex = 9
@@ -372,7 +374,7 @@ Partial Class Form1
         'ShowDeletedCheckBox
         '
         Me.ShowDeletedCheckBox.AutoSize = True
-        Me.ShowDeletedCheckBox.Location = New System.Drawing.Point(43, 162)
+        Me.ShowDeletedCheckBox.Location = New System.Drawing.Point(2106, 34)
         Me.ShowDeletedCheckBox.Name = "ShowDeletedCheckBox"
         Me.ShowDeletedCheckBox.Size = New System.Drawing.Size(177, 54)
         Me.ShowDeletedCheckBox.TabIndex = 7
@@ -515,7 +517,7 @@ Partial Class Form1
         'Panel3
         '
         Me.Panel3.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle
-        Me.Panel3.Controls.Add(Me.ComboBox2)
+        Me.Panel3.Controls.Add(Me.ComboBox3)
         Me.Panel3.Controls.Add(Me.Label4)
         Me.Panel3.Controls.Add(Me.Label2)
         Me.Panel3.Controls.Add(Me.RadioButton1)
@@ -528,17 +530,13 @@ Partial Class Form1
         Me.Panel3.Size = New System.Drawing.Size(481, 379)
         Me.Panel3.TabIndex = 13
         '
-        'ComboBox2
+        'ComboBox3
         '
-        Me.ComboBox2.DataBindings.Add(New System.Windows.Forms.Binding("SelectedValue", Me.EmployeeTBindingSource, "EmployeeName", True))
-        Me.ComboBox2.DataSource = Me.EmployeeTBindingSource
-        Me.ComboBox2.DisplayMember = "EmployeeName"
-        Me.ComboBox2.FormattingEnabled = True
-        Me.ComboBox2.Location = New System.Drawing.Point(16, 225)
-        Me.ComboBox2.Name = "ComboBox2"
-        Me.ComboBox2.Size = New System.Drawing.Size(431, 33)
-        Me.ComboBox2.TabIndex = 1
-        Me.ComboBox2.ValueMember = "EmployeeName"
+        Me.ComboBox3.FormattingEnabled = True
+        Me.ComboBox3.Location = New System.Drawing.Point(16, 225)
+        Me.ComboBox3.Name = "ComboBox3"
+        Me.ComboBox3.Size = New System.Drawing.Size(431, 33)
+        Me.ComboBox3.TabIndex = 1
         '
         'Label4
         '
@@ -593,6 +591,7 @@ Partial Class Form1
         '
         'DateTimePicker2
         '
+        Me.DateTimePicker2.CausesValidation = False
         Me.DateTimePicker2.Location = New System.Drawing.Point(23, 33)
         Me.DateTimePicker2.Name = "DateTimePicker2"
         Me.DateTimePicker2.Size = New System.Drawing.Size(404, 31)
@@ -617,12 +616,7 @@ Partial Class Form1
         Me.Name = "Form1"
         Me.Text = "Cranked Out - Manager Console"
         CType(Me.DataGridView1, System.ComponentModel.ISupportInitialize).EndInit()
-        CType(Me.TimeSheetTBindingSource, System.ComponentModel.ISupportInitialize).EndInit()
-        CType(Me.EmployeeTBindingSource, System.ComponentModel.ISupportInitialize).EndInit()
         CType(Me.logoPictureBox, System.ComponentModel.ISupportInitialize).EndInit()
-        CType(Me.AntonTimesheetBindingSource, System.ComponentModel.ISupportInitialize).EndInit()
-        CType(Me.StoreTBindingSource, System.ComponentModel.ISupportInitialize).EndInit()
-        CType(Me.TravelTBindingSource, System.ComponentModel.ISupportInitialize).EndInit()
         Me.TabControl1.ResumeLayout(False)
         Me.TabPage1.ResumeLayout(False)
         Me.Panel2.ResumeLayout(False)
@@ -639,18 +633,15 @@ Partial Class Form1
     End Sub
 
     Friend WithEvents DataGridView1 As DataGridView
-    Friend WithEvents TimeSheetTBindingSource As BindingSource
     Friend WithEvents previousRecordButton As Button
     Friend WithEvents nextRecordButton As Button
     Friend WithEvents deleteRecordButton As Button
     Friend WithEvents addTimeButton As Button
     Friend WithEvents employeeNameCb As ComboBox
-    Friend WithEvents EmployeeTBindingSource As BindingSource
     Friend WithEvents DateTimePicker1 As DateTimePicker
     Friend WithEvents logoPictureBox As PictureBox
     Friend WithEvents startTimePicker As DateTimePicker
     Friend WithEvents endTimePicker As DateTimePicker
-    Friend WithEvents AntonTimesheetBindingSource As BindingSource
     Friend WithEvents TimeSheetIDDataGridViewTextBoxColumn As DataGridViewTextBoxColumn
     Friend WithEvents EmployeeNameDataGridViewTextBoxColumn As DataGridViewTextBoxColumn
     Friend WithEvents LocationDataGridViewTextBoxColumn As DataGridViewTextBoxColumn
@@ -667,10 +658,7 @@ Partial Class Form1
     Friend WithEvents nameLabel As Label
     Friend WithEvents storeCb2 As ComboBox
     Friend WithEvents storeCb1 As ComboBox
-    Friend WithEvents TravelTBindingSource As BindingSource
-    Friend WithEvents StoreTBindingSource As BindingSource
     Friend WithEvents StoreTBindingSource1 As BindingSource
-    Friend WithEvents DirectoryEntry1 As DirectoryServices.DirectoryEntry
     Friend WithEvents TabControl1 As TabControl
     Friend WithEvents TabPage1 As TabPage
     Friend WithEvents Panel2 As Panel
@@ -688,7 +676,7 @@ Partial Class Form1
     Friend WithEvents PictureBox1 As PictureBox
     Friend WithEvents Button1 As Button
     Friend WithEvents Panel3 As Panel
-    Friend WithEvents ComboBox2 As ComboBox
+    Friend WithEvents ComboBox3 As ComboBox
     Friend WithEvents Label4 As Label
     Friend WithEvents Label2 As Label
     Friend WithEvents RadioButton1 As RadioButton
@@ -700,4 +688,5 @@ Partial Class Form1
     Friend WithEvents dateUpButton As Button
     Friend WithEvents ShowDeletedCheckBox As CheckBox
     Friend WithEvents WarningLogRichTextBox As RichTextBox
+    Friend WithEvents clearButton As Button
 End Class
