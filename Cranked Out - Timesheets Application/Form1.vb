@@ -91,15 +91,16 @@ Public Class Form1
         endTimePicker.Value = DateTime.Now
 
         StartSyncTimer()
+        UpdateDeleteButtonText()
 
         Me.Enabled = True
 
     End Sub
 
 
-    'timer to check for internet connection and sync pending records every 600 seconds
+    'timer to check for internet connection and sync pending records every 300 seconds
     Private ReadOnly syncTimer As New Timer With {
-    .Interval = 600000
+    .Interval = 300000
 }
 
     Private Sub StartSyncTimer()
@@ -2037,62 +2038,170 @@ Public Class Form1
     Public Class TimeSheetDeleteData
         Public Property TimeSheetID As Guid
     End Class
-    Private Async Sub deleteRecordButton_Click(sender As Object, e As EventArgs) Handles deleteRecordButton.Click
+    Private Sub deleteRecordButton_Click(
+    sender As Object,
+    e As EventArgs
+) Handles deleteRecordButton.Click
+
         Try
-            ' Check if a row is selected
-            If DataGridView1.SelectedRows.Count > 0 Then
-                ' Get the ID of the selected row
-                Dim selectedRowID As Guid = CType(DataGridView1.SelectedRows(0).Cells("TimeSheetID").Value, Guid)
+            If DataGridView1.SelectedRows.Count = 0 Then
+                MessageBox.Show(
+                "Please select a record first.")
 
-                ' Update the local SQLite database to set the "Deleted" column to true
-                UpdateDeletedFlagInLocalDatabase(selectedRowID)
-
-                ' Handle success (e.g., refresh the data grid)
-                LogWarning("Record marked as deleted successfully", Color.Green)
-                Await RefreshDataAsync()
-            Else
-                MessageBox.Show("Please select a row to mark as deleted. Double click the blank box that is located next to the record you would like to delete.")
+                Return
             End If
+
+            Dim selectedRow As DataGridViewRow =
+            DataGridView1.SelectedRows(0)
+
+            Dim idValue As Object =
+            selectedRow.Cells("TimeSheetID").Value
+
+            If idValue Is Nothing OrElse
+           idValue Is DBNull.Value Then
+
+                MessageBox.Show(
+                "The selected row does not contain a TimeSheetID.")
+
+                Return
+            End If
+
+            Dim selectedRowID As Guid
+
+            If Not Guid.TryParse(
+                idValue.ToString(),
+                selectedRowID) Then
+
+                MessageBox.Show(
+                "The selected TimeSheetID is invalid.")
+
+                Return
+            End If
+
+            Dim deletedValue As Integer
+
+            If Not Integer.TryParse(
+                Convert.ToString(
+                    selectedRow.Cells("Deleted").Value),
+                deletedValue) Then
+
+                MessageBox.Show(
+                "The selected row has an invalid delete status.")
+
+                Return
+            End If
+
+            Dim reinstateRecord As Boolean =
+            ShowDeletedCheckBox.Checked
+
+            If reinstateRecord AndAlso deletedValue <> 1 Then
+                MessageBox.Show(
+                "Only deleted records can be reinstated.")
+
+                Return
+            End If
+
+            If Not reinstateRecord AndAlso deletedValue = 1 Then
+                MessageBox.Show(
+                "This record is already deleted.")
+
+                Return
+            End If
+
+            UpdateDeletedFlagInLocalDatabase(
+            selectedRowID,
+            reinstateRecord)
+
+            If reinstateRecord Then
+                LogWarning(
+                "Record reinstated and marked Pending.",
+                Color.DarkOrange)
+            Else
+                LogWarning(
+                "Record deleted and marked Pending.",
+                Color.DarkOrange)
+            End If
+
+            RefreshData()
         Catch ex As Exception
-            ' Log the exception and show an error message
-            Console.WriteLine("Error: " & ex.Message)
-            MessageBox.Show("An error occurred: " & ex.Message)
+            LogWarning(
+            "An error occurred while changing the record status: " &
+            ex.Message,
+            Color.Red)
         End Try
     End Sub
-    Private Sub UpdateDeletedFlagInLocalDatabase(selectedRowID As Guid)
+    Private Sub UpdateDeletedFlagInLocalDatabase(
+    selectedRowID As Guid,
+    reinstateRecord As Boolean)
+
+        Dim documentsPath As String =
+        Environment.GetFolderPath(
+            Environment.SpecialFolder.MyDocuments)
+
+        Dim databaseFilePath As String =
+        Path.Combine(
+            documentsPath,
+            "LocalTimesheet.db")
+
+        Dim connectionString As String =
+        $"Data Source={databaseFilePath};Version=3;"
+
+        Dim deletedValue As Integer
+
+        If reinstateRecord Then
+            deletedValue = 0
+        Else
+            deletedValue = 1
+        End If
+
+        Dim currentTimestamp As DateTime =
+        DateTime.Now
+
         Try
-            ' Define the file path for the SQLite database
-            Dim documentsPath As String = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-            Dim databaseFilePath As String = Path.Combine(documentsPath, "LocalTimesheet.db")
+            Using connection As New SQLiteConnection(
+            connectionString)
 
-            ' Create the connection string with the database file path
-            Dim connectionString As String = $"Data Source={databaseFilePath};Version=3;"
-
-            ' Get the current date and time
-            Dim currentTimestamp As DateTime = DateTime.Now
-
-            ' Update the "Deleted" column in the local database for the selected record
-            Using connection As New SQLiteConnection(connectionString)
                 connection.Open()
 
-                ' Define the update query
                 Dim updateQuery As String =
-    "UPDATE TimeSheetT SET " &
-    "Deleted = 1, " &
-    "Timestamp = @Timestamp, " &
-    "SyncStatus = 'Pending', " &
-    "SyncError = NULL " &
-    "WHERE TimeSheetID = @TimeSheetID"
+                "UPDATE TimeSheetT SET " &
+                "Deleted = @Deleted, " &
+                "Timestamp = @Timestamp, " &
+                "SyncStatus = 'Pending', " &
+                "LastSyncAttemptUtc = NULL, " &
+                "LastSyncedUtc = NULL, " &
+                "SyncError = NULL " &
+                "WHERE TimeSheetID = @TimeSheetID"
 
-                Using cmd As New SQLiteCommand(updateQuery, connection)
-                    cmd.Parameters.AddWithValue("@TimeSheetID", selectedRowID)
-                    cmd.Parameters.AddWithValue("@Timestamp", currentTimestamp)
-                    cmd.ExecuteNonQuery()
+                Using command As New SQLiteCommand(
+                updateQuery,
+                connection)
+
+                    command.Parameters.AddWithValue(
+                    "@Deleted",
+                    deletedValue)
+
+                    command.Parameters.AddWithValue(
+                    "@Timestamp",
+                    currentTimestamp)
+
+                    command.Parameters.AddWithValue(
+                    "@TimeSheetID",
+                    selectedRowID)
+
+                    Dim rowsAffected As Integer =
+                    command.ExecuteNonQuery()
+
+                    If rowsAffected = 0 Then
+                        Throw New InvalidOperationException(
+                        "The selected timesheet record was not found.")
+                    End If
                 End Using
             End Using
         Catch ex As Exception
-            ' Handle any exceptions that may occur while updating the local database
-            MessageBox.Show("An error occurred while updating the local SQLite database: " & ex.Message)
+            MessageBox.Show(
+            "An error occurred while changing the local record: " &
+            ex.Message)
         End Try
     End Sub
 
@@ -2545,6 +2654,7 @@ Public Class Form1
 
     Private Async Sub ShowDeletedCheckBox_CheckedChanged(sender As Object, e As EventArgs) Handles ShowDeletedCheckBox.CheckedChanged
         Await RefreshDataAsync()
+        UpdateDeleteButtonText()
     End Sub
 
     Private Sub clearButton_Click(sender As Object, e As EventArgs) Handles clearButton.Click
@@ -2556,6 +2666,14 @@ Public Class Form1
     End Sub
 
 
+
+    Private Sub UpdateDeleteButtonText()
+        If ShowDeletedCheckBox.Checked Then
+            deleteRecordButton.Text = "Reinstate Record"
+        Else
+            deleteRecordButton.Text = "Delete Record"
+        End If
+    End Sub
 
 
 
