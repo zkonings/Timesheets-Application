@@ -64,7 +64,7 @@ Public Class Form1
         apiKey = "YOUR_GENERATED_API_KEY"
         baseApiUrl = "https://www.crankedout.ca/"
 
-        If IsInternetConnected() Then ' The machine is connected to the internet, so you can run procedures that require internet access.
+        If Await HasRemoteApiAccessAsync() Then ' The machine is connected to the internet, so you can run procedures that require internet access.
 
             Await MergeEmployeeData() ' Merge employee data
             Await MergeStoreData() ' Merge store data
@@ -112,7 +112,7 @@ Public Class Form1
     sender As Object,
     e As EventArgs)
 
-        If IsInternetConnected() Then
+        If Await HasRemoteApiAccessAsync() Then
             Await SyncPendingRecordsAsync()
         End If
     End Sub
@@ -2560,7 +2560,7 @@ Public Class Form1
 
     'Refresh the DataGridView1
     Private Async Function RefreshDataAsync() As Task
-        If IsInternetConnected() Then
+        If Await HasRemoteApiAccessAsync() Then
             Await LoadTimeSheetDataFromDatabase()
             Await SyncPendingRecordsAsync()
         Else
@@ -2615,24 +2615,59 @@ Public Class Form1
 
 
     'Check Internet Connection
-    Public Function IsInternetConnected() As Boolean
-        Try
-            Dim ping As New Ping()
-            Dim reply As PingReply = ping.Send("www.google.com")
 
-            ' Check if the ping was successful
-            If reply.Status = IPStatus.Success Then
-                ' Machine is connected to the internet
-                Return True
-            Else
-                ' Machine is not connected to the internet
-                Return False
-            End If
+    Private Async Function HasRemoteApiAccessAsync() As Task(Of Boolean)
+        If Not NetworkInterface.GetIsNetworkAvailable() Then
+            Return False
+        End If
+
+        Try
+            Using httpClient As New HttpClient()
+                httpClient.BaseAddress = New Uri(baseApiUrl)
+                httpClient.Timeout = TimeSpan.FromSeconds(10)
+
+                httpClient.DefaultRequestHeaders.Add(
+                "X-API-Key",
+                apiKey)
+
+                Using response As HttpResponseMessage =
+                Await httpClient.GetAsync(
+                    "api/TimeSheet",
+                    HttpCompletionOption.ResponseHeadersRead)
+
+                    If Not response.IsSuccessStatusCode Then
+                        Return False
+                    End If
+
+                    Dim content As String =
+                    Await response.Content.ReadAsStringAsync()
+
+                    If String.IsNullOrWhiteSpace(content) Then
+                        Return False
+                    End If
+
+                    'A captive portal commonly returns HTML instead
+                    'of the expected JSON array.
+                    Dim json As JToken =
+                    JToken.Parse(content)
+
+                    Return json.Type = JTokenType.Array
+                End Using
+            End Using
+        Catch ex As TaskCanceledException
+            'Includes the request timeout.
+            Return False
+        Catch ex As HttpRequestException
+            Return False
+        Catch ex As JsonException
+            'The response was not valid JSON, likely a login page.
+            Return False
         Catch ex As Exception
-            ' An exception occurred (e.g., no network available)
             Return False
         End Try
     End Function
+
+
 
 
     'Creates messages in the RichTextBox with specified color
