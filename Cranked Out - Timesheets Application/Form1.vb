@@ -10,6 +10,7 @@ Imports System.Net.NetworkInformation
 Imports System.Security.Cryptography.X509Certificates
 Imports System.Text
 Imports System.Text.RegularExpressions
+
 Imports System.Windows.Forms.VisualStyles.VisualStyleElement
 Imports Microsoft.Extensions.Configuration
 Imports Newtonsoft.Json
@@ -17,6 +18,8 @@ Imports Newtonsoft.Json.Linq
 
 
 Public Class Form1
+
+
 
 
 
@@ -47,6 +50,8 @@ Public Class Form1
     End Sub
 
 
+    Private syncInProgress As Integer
+
     Private originalStoreData As List(Of StoreData) ' Keep a copy of the original items
 
     Private Async Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
@@ -66,7 +71,7 @@ Public Class Form1
             Await MergeTravelData() 'Merge Travel Distances
             Await LoadTimeSheets()
             Await SyncPendingRecordsAsync()
-            ' SyncDatabases()
+
 
         Else ' The machine is not connected to the internet, so handle it accordingly.
             LogWarning("No internet connection available. The application will attempt to sync at a later time.", Color.Red)
@@ -85,9 +90,36 @@ Public Class Form1
         startTimePicker.Value = DateTime.Now
         endTimePicker.Value = DateTime.Now
 
+        StartSyncTimer()
+
         Me.Enabled = True
 
     End Sub
+
+
+    'timer to check for internet connection and sync pending records every 600 seconds
+    Private ReadOnly syncTimer As New Timer With {
+    .Interval = 600000
+}
+
+    Private Sub StartSyncTimer()
+        AddHandler syncTimer.Tick, AddressOf SyncTimer_Tick
+        syncTimer.Start()
+    End Sub
+
+    Private Async Sub SyncTimer_Tick(
+    sender As Object,
+    e As EventArgs)
+
+        If IsInternetConnected() Then
+            Await SyncPendingRecordsAsync()
+        End If
+    End Sub
+
+
+
+
+
 
 
     'TimeSheet Data Merging and syncing
@@ -635,6 +667,36 @@ Public Class Form1
 
 
     Private Async Function SyncPendingRecordsAsync() As Task
+        'Atomically change 0 to 1.
+        'If the previous value was already 1, synchronization is running.
+        If System.Threading.Interlocked.Exchange(
+        syncInProgress,
+        1) = 1 Then
+
+            LogWarning(
+            "Synchronization is already in progress.",
+            Color.DarkOrange)
+
+            Return
+        End If
+
+        Try
+            Await SyncPendingRecordsCoreAsync()
+        Catch ex As Exception
+            LogWarning(
+            "Synchronization failed: " & ex.Message,
+            Color.Red)
+        Finally
+            'Allow the next synchronization to run.
+            System.Threading.Interlocked.Exchange(
+            syncInProgress,
+            0)
+        End Try
+    End Function
+
+
+
+    Private Async Function SyncPendingRecordsCoreAsync() As Task
         Try
             Dim remoteData As List(Of TimeEntryData) =
             Await RetrieveDataFromRemoteAPI()
@@ -1115,139 +1177,8 @@ Public Class Form1
         ' Return the list of time entries retrieved from the remote API
         Return data
     End Function
-    Private Sub UpdateLocalDatabase(remoteData As List(Of TimeEntryData), localData As List(Of TimeEntryData))
-        Try
-            ' Define the file path for the SQLite database
-            Dim documentsPath As String = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-            Dim databaseFilePath As String = Path.Combine(documentsPath, "LocalTimesheet.db")
-
-            ' Create the connection string with the database file path
-            Dim connectionString As String = $"Data Source={databaseFilePath};Version=3;"
-
-            Dim syncedRecords As Integer = 0
-
-            Using connection As New SQLiteConnection(connectionString)
-                connection.Open()
-
-                For Each remoteRecord As TimeEntryData In remoteData
-                    ' Find the corresponding record in localData
-                    Dim localRecord As TimeEntryData = localData.FirstOrDefault(Function(r) r.TimeSheetID = remoteRecord.TimeSheetID)
-
-                    ' Check if the record exists locally and if the remote record's timestamp is newer
-                    If localRecord IsNot Nothing AndAlso remoteRecord.Timestamp > localRecord.Timestamp Then
-                        ' Insert or update the record if it doesn't exist or if the Timestamp is newer
-                        Dim query As String = "INSERT OR REPLACE INTO TimeSheetT (TimeSheetID, [Employee Name], Location, [Second Location], [Date], [Start Time], [End Time], Timestamp, Deleted) VALUES (@TimeSheetID, @EmployeeName, @Location, @SecondLocation, @Date, @StartTime, @EndTime, @Timestamp, @Deleted)"
-
-                        Using cmd As New SQLiteCommand(query, connection)
-                            cmd.Parameters.AddWithValue("@TimeSheetID", remoteRecord.TimeSheetID)
-                            cmd.Parameters.AddWithValue("@EmployeeName", remoteRecord.EmployeeName)
-                            cmd.Parameters.AddWithValue("@Location", remoteRecord.Location)
-                            cmd.Parameters.AddWithValue("@SecondLocation", remoteRecord.SecondLocation)
-                            cmd.Parameters.AddWithValue("@Date", remoteRecord.Date)
-                            cmd.Parameters.AddWithValue("@StartTime", remoteRecord.StartTime)
-                            cmd.Parameters.AddWithValue("@EndTime", remoteRecord.EndTime)
-                            cmd.Parameters.AddWithValue("@Timestamp", remoteRecord.Timestamp)
-                            cmd.Parameters.AddWithValue("@Deleted", remoteRecord.Deleted)
-
-                            ' Execute the query
-                            Dim rowsAffected As Integer = cmd.ExecuteNonQuery()
-
-                            ' Check if a record was updated or inserted
-                            If rowsAffected > 0 Then
-                                syncedRecords += 1
-                            End If
-                        End Using
-                    End If
-                Next
-            End Using
-
-            ' Display the number of synced records for the local database
-            Console.WriteLine($"Data inserted or updated in the local SQLite database. Synced Records: {syncedRecords}")
-        Catch ex As Exception
-            Console.WriteLine("An error occurred while updating data in the local SQLite database: " & ex.Message)
-        End Try
-    End Sub
-
-    Private Sub UpdateRemoteDatabase(localData As List(Of TimeEntryData), remoteData As List(Of TimeEntryData))
-        Try
-            ' Compare the timestamps and update the remote database with newer records
-
-            Using httpClient As New HttpClient()
-                httpClient.BaseAddress = New Uri(baseApiUrl)
-                httpClient.DefaultRequestHeaders.Add("X-API-Key", apiKey)
-
-                For Each localRecord As TimeEntryData In localData
-                    ' Find the corresponding record in remoteData
-                    Dim remoteRecord As TimeEntryData = remoteData.FirstOrDefault(Function(r) r.TimeSheetID = localRecord.TimeSheetID)
-
-                    If remoteRecord Is Nothing Then
-                        ' Record doesn't exist remotely, construct an insert request to your remote API
-                        Dim insertData As New TimeEntryData()
-                        insertData.TimeSheetID = localRecord.TimeSheetID
-                        insertData.EmployeeName = localRecord.EmployeeName
-                        insertData.Date = localRecord.Date
-                        insertData.StartTime = localRecord.StartTime
-                        insertData.EndTime = localRecord.EndTime
-                        insertData.Location = localRecord.Location
-                        insertData.SecondLocation = localRecord.SecondLocation
-                        insertData.Timestamp = localRecord.Timestamp ' Include the Timestamp field
-                        insertData.Deleted = localRecord.Deleted
 
 
-                        ' Serialize insertData to JSON
-                        Dim jsonInsertData As String = JsonConvert.SerializeObject(insertData)
-
-                        ' Make an API request to insert the record into the remote database
-                        Dim insertResponse As HttpResponseMessage = httpClient.PostAsync("api/timeentries", New StringContent(jsonInsertData, Encoding.UTF8, "application/json")).Result
-
-                        If insertResponse.IsSuccessStatusCode Then
-                            ' Handle success (e.g., log success or perform additional actions)
-                            Console.WriteLine($"Record with TimeSheetID {localRecord.TimeSheetID} inserted into the remote database.")
-                        Else
-                            ' Handle API insert failure
-                            Dim errorResponse As String = insertResponse.Content.ReadAsStringAsync().Result
-                            Console.WriteLine("API Error Response: " & errorResponse)
-                            Console.WriteLine($"Failed to insert record with TimeSheetID {localRecord.TimeSheetID} into the remote database.")
-                        End If
-                    Else
-                        ' Record exists remotely, compare timestamps
-                        If localRecord.Timestamp > remoteRecord.Timestamp Then
-                            ' Local record is newer, construct an update request to your remote API
-                            Dim updateData As New TimeEntryData()
-                            updateData.TimeSheetID = localRecord.TimeSheetID
-                            updateData.EmployeeName = localRecord.EmployeeName
-                            updateData.Date = localRecord.Date
-                            updateData.StartTime = localRecord.StartTime
-                            updateData.EndTime = localRecord.EndTime
-                            updateData.Location = localRecord.Location
-                            updateData.SecondLocation = localRecord.SecondLocation
-                            updateData.Timestamp = localRecord.Timestamp ' Include the Timestamp field
-                            updateData.Deleted = localRecord.Deleted ' Include the Deleted field
-
-                            ' Serialize updateData to JSON
-                            Dim jsonUpdateData As String = JsonConvert.SerializeObject(updateData)
-
-                            ' Make an API request to update the record in the remote database
-                            Dim updateResponse As HttpResponseMessage = httpClient.PutAsync($"api/timeentries/{localRecord.TimeSheetID}", New StringContent(jsonUpdateData, Encoding.UTF8, "application/json")).Result
-
-                            If updateResponse.IsSuccessStatusCode Then
-                                ' Handle success (e.g., log success or perform additional actions)
-                                Console.WriteLine($"Record with TimeSheetID {localRecord.TimeSheetID} updated in the remote database.")
-                            Else
-                                ' Handle API update failure
-                                Dim errorResponse As String = updateResponse.Content.ReadAsStringAsync().Result
-                                Console.WriteLine("API Error Response: " & errorResponse)
-                                Console.WriteLine($"Failed to update record with TimeSheetID {localRecord.TimeSheetID} in the remote database.")
-                            End If
-                        End If
-                    End If
-                Next
-            End Using
-        Catch ex As Exception
-            ' Handle any exceptions that may occur during the process
-            Console.WriteLine("An error occurred while updating data in the remote database: " & ex.Message)
-        End Try
-    End Sub
 
 
 
