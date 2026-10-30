@@ -1,18 +1,19 @@
-﻿Imports System.Data.OleDb
-Imports System.Data.SQLite
+﻿Imports System.ComponentModel
+Imports System.Data.OleDb
 Imports System.Data.SqlClient
+Imports System.Data.SQLite
 Imports System.Drawing.Text
 Imports System.Globalization
-Imports System.Net.Http
-Imports System.Text.RegularExpressions
-Imports System.Windows.Forms.VisualStyles.VisualStyleElement
-Imports Newtonsoft.Json
 Imports System.IO
+Imports System.Net.Http
+Imports System.Net.NetworkInformation
 Imports System.Security.Cryptography.X509Certificates
 Imports System.Text
-Imports System.Net.NetworkInformation
+Imports System.Text.RegularExpressions
+Imports System.Windows.Forms.VisualStyles.VisualStyleElement
 Imports Microsoft.Extensions.Configuration
-Imports System.ComponentModel
+Imports Newtonsoft.Json
+Imports Newtonsoft.Json.Linq
 
 
 Public Class Form1
@@ -64,7 +65,8 @@ Public Class Form1
             Await MergeStoreData() ' Merge store data
             Await MergeTravelData() 'Merge Travel Distances
             Await LoadTimeSheets()
-            SyncDatabases()
+            Await SyncPendingRecordsAsync()
+            ' SyncDatabases()
 
         Else ' The machine is not connected to the internet, so handle it accordingly.
             LogWarning("No internet connection available. The application will attempt to sync at a later time.", Color.Red)
@@ -632,28 +634,345 @@ Public Class Form1
 
 
 
-
-
-    'syncs changes between both databases to have the newest timestamped record
-    Private Async Sub SyncDatabases()
+    Private Async Function SyncPendingRecordsAsync() As Task
         Try
-            ' Retrieve data from the remote API using the TimeEntryData class
-            Dim remoteData As List(Of TimeEntryData) = Await RetrieveDataFromRemoteAPI()
+            Dim remoteData As List(Of TimeEntryData) =
+            Await RetrieveDataFromRemoteAPI()
 
-            ' Retrieve data from the local SQLite database using the TimeEntryData class
-            Dim localData As List(Of TimeEntryData) = RetrieveDataFromLocalDatabase()
+            Dim localData As List(Of TimeEntryData) =
+            RetrieveDataFromLocalDatabase()
 
-            ' Compare and update records in the local SQLite database
-            UpdateLocalDatabase(remoteData, localData)
+            Dim pendingRecords As List(Of TimeEntryData) =
+            localData.Where(
+                Function(record)
+                    Return record.SyncStatus = "Pending" OrElse
+                           record.SyncStatus = "Failed"
+                End Function).ToList()
 
-            ' Compare and update records in the remote database
-            UpdateRemoteDatabase(localData, remoteData)
+            If pendingRecords.Count = 0 Then
+                LogWarning(
+                "No pending timesheet records need synchronization.",
+                Color.Green)
+
+                Return
+            End If
+
+            Using httpClient As New HttpClient()
+                httpClient.BaseAddress = New Uri(baseApiUrl)
+                httpClient.DefaultRequestHeaders.Add(
+                "X-API-Key",
+                apiKey)
+
+                For Each localRecord As TimeEntryData In pendingRecords
+                    Try
+                        UpdateLocalSyncState(
+                        localRecord.TimeSheetID,
+                        "Syncing",
+                        Nothing,
+                        Nothing,
+                        Nothing)
+
+                        Dim remoteRecord As TimeEntryData =
+                        remoteData.FirstOrDefault(
+                            Function(record)
+                                Return record.TimeSheetID =
+                                       localRecord.TimeSheetID
+                            End Function)
+
+                        Dim response As HttpResponseMessage = Nothing
+
+                        If localRecord.Deleted = 1 Then
+                            ' A deleted local record is sent to the DELETE endpoint.
+                            If remoteRecord Is Nothing Then
+                                ' The record is already absent remotely.
+                                UpdateLocalSyncState(
+                                localRecord.TimeSheetID,
+                                "Synced",
+                                Nothing,
+                                localRecord.RowVersion,
+                                localRecord.LastModifiedUtc)
+
+                                Continue For
+                            End If
+
+                            If localRecord.RowVersion Is Nothing OrElse
+                           localRecord.RowVersion.Length <> 8 Then
+
+                                UpdateLocalSyncState(
+                                localRecord.TimeSheetID,
+                                "Failed",
+                                "The record has no valid RowVersion.",
+                                Nothing,
+                                Nothing)
+
+                                Continue For
+                            End If
+
+                            Dim deletePayload As New With {
+                            .RowVersion = localRecord.RowVersion
+                        }
+
+                            Dim deleteJson As String =
+                            JsonConvert.SerializeObject(deletePayload)
+
+                            Using deleteRequest As New HttpRequestMessage(
+                            HttpMethod.Delete,
+                            $"api/deletetimeentries/{localRecord.TimeSheetID}")
+
+                                deleteRequest.Content =
+                                New StringContent(
+                                    deleteJson,
+                                    Encoding.UTF8,
+                                    "application/json")
+
+                                response =
+                                Await httpClient.SendAsync(deleteRequest)
+                            End Using
+
+                        ElseIf remoteRecord Is Nothing Then
+                            ' The record does not exist remotely, so insert it.
+                            Dim insertJson As String =
+                            JsonConvert.SerializeObject(localRecord)
+
+                            response =
+                            Await httpClient.PostAsync(
+                                "api/timeentries",
+                                New StringContent(
+                                    insertJson,
+                                    Encoding.UTF8,
+                                    "application/json"))
+
+                        Else
+                            ' The record exists remotely, so update it.
+                            If localRecord.RowVersion Is Nothing OrElse
+                           localRecord.RowVersion.Length <> 8 Then
+
+                                UpdateLocalSyncState(
+                                localRecord.TimeSheetID,
+                                "Failed",
+                                "The record has no valid RowVersion.",
+                                Nothing,
+                                Nothing)
+
+                                Continue For
+                            End If
+
+                            Dim updateJson As String =
+                            JsonConvert.SerializeObject(localRecord)
+
+                            response =
+                            Await httpClient.PutAsync(
+                                $"api/timeentries/{localRecord.TimeSheetID}",
+                                New StringContent(
+                                    updateJson,
+                                    Encoding.UTF8,
+                                    "application/json"))
+                        End If
+
+                        Dim responseContent As String =
+                        Await response.Content.ReadAsStringAsync()
+
+                        If response.StatusCode =
+                       Net.HttpStatusCode.Conflict Then
+
+                            UpdateLocalSyncState(
+                            localRecord.TimeSheetID,
+                            "Conflict",
+                            responseContent,
+                            Nothing,
+                            Nothing)
+
+                            LogWarning(
+                            $"Conflict detected for record " &
+                            $"{localRecord.TimeSheetID}.",
+                            Color.Red)
+
+                            Continue For
+                        End If
+
+                        If Not response.IsSuccessStatusCode Then
+                            UpdateLocalSyncState(
+                            localRecord.TimeSheetID,
+                            "Failed",
+                            $"HTTP {(CInt(response.StatusCode))}: " &
+                            responseContent,
+                            Nothing,
+                            Nothing)
+
+                            Continue For
+                        End If
+
+                        Dim responseJson As JObject =
+                        JsonConvert.DeserializeObject(Of JObject)(
+                            responseContent)
+
+                        Dim returnedRowVersion As Byte() =
+                        localRecord.RowVersion
+
+                        Dim returnedLastModifiedUtc As DateTime? =
+                        localRecord.LastModifiedUtc
+
+                        If responseJson IsNot Nothing Then
+                            Dim rowVersionToken As JToken =
+                            responseJson("RowVersion")
+
+                            If rowVersionToken Is Nothing Then
+                                rowVersionToken =
+                                responseJson("rowVersion")
+                            End If
+
+                            If rowVersionToken IsNot Nothing AndAlso
+                           rowVersionToken.Type <> JTokenType.Null Then
+
+                                returnedRowVersion =
+                                rowVersionToken.ToObject(Of Byte())()
+                            End If
+
+                            Dim lastModifiedToken As JToken =
+                            responseJson("LastModifiedUtc")
+
+                            If lastModifiedToken Is Nothing Then
+                                lastModifiedToken =
+                                responseJson("lastModifiedUtc")
+                            End If
+
+                            If lastModifiedToken IsNot Nothing AndAlso
+                           lastModifiedToken.Type <> JTokenType.Null Then
+
+                                returnedLastModifiedUtc =
+                                lastModifiedToken.ToObject(Of DateTime?)()
+                            End If
+                        End If
+
+                        UpdateLocalSyncState(
+                        localRecord.TimeSheetID,
+                        "Synced",
+                        Nothing,
+                        returnedRowVersion,
+                        returnedLastModifiedUtc)
+
+                        LogWarning(
+                        $"Record {localRecord.TimeSheetID} " &
+                        "was synchronized.",
+                        Color.Green)
+                    Catch ex As Exception
+                        UpdateLocalSyncState(
+                        localRecord.TimeSheetID,
+                        "Failed",
+                        ex.Message,
+                        Nothing,
+                        Nothing)
+
+                        LogWarning(
+                        $"Failed to synchronize record " &
+                        $"{localRecord.TimeSheetID}: {ex.Message}",
+                        Color.Red)
+                    End Try
+                Next
+            End Using
+
+            Await LoadTimeSheetDataFromDatabase()
         Catch ex As Exception
-            ' Handle any exceptions that may occur during the process
-            Console.WriteLine("An error occurred during database synchronization: " & ex.Message)
+            LogWarning(
+            "Synchronization failed: " & ex.Message,
+            Color.Red)
         End Try
-        LogWarning("Connected. Databases synced", Color.Green)
+    End Function
+
+    Private Sub UpdateLocalSyncState(
+    timeSheetID As Guid,
+    syncStatus As String,
+    syncError As String,
+    rowVersion As Byte(),
+    lastModifiedUtc As DateTime?)
+
+        Dim documentsPath As String =
+        Environment.GetFolderPath(
+            Environment.SpecialFolder.MyDocuments)
+
+        Dim databaseFilePath As String =
+        Path.Combine(
+            documentsPath,
+            "LocalTimesheet.db")
+
+        Dim connectionString As String =
+        $"Data Source={databaseFilePath};Version=3;"
+
+        Dim rowVersionValue As Object = DBNull.Value
+
+        If rowVersion IsNot Nothing Then
+            rowVersionValue = rowVersion
+        End If
+
+        Dim lastModifiedValue As Object = DBNull.Value
+
+        If lastModifiedUtc.HasValue Then
+            lastModifiedValue = lastModifiedUtc.Value
+        End If
+
+        Using connection As New SQLiteConnection(connectionString)
+            connection.Open()
+
+            Dim query As String =
+            "UPDATE TimeSheetT SET " &
+            "SyncStatus = @SyncStatus, " &
+            "LastSyncAttemptUtc = @LastSyncAttemptUtc, " &
+            "LastSyncedUtc = CASE " &
+            "WHEN @SyncStatus = 'Synced' " &
+            "THEN @LastSyncedUtc " &
+            "ELSE LastSyncedUtc END, " &
+            "SyncError = @SyncError, " &
+            "RowVersion = CASE " &
+            "WHEN @RowVersion IS NOT NULL " &
+            "THEN @RowVersion " &
+            "ELSE RowVersion END, " &
+            "LastModifiedUtc = CASE " &
+            "WHEN @LastModifiedUtc IS NOT NULL " &
+            "THEN @LastModifiedUtc " &
+            "ELSE LastModifiedUtc END " &
+            "WHERE TimeSheetID = @TimeSheetID"
+
+            Using command As New SQLiteCommand(query, connection)
+                command.Parameters.AddWithValue(
+                "@SyncStatus",
+                syncStatus)
+
+                command.Parameters.AddWithValue(
+                "@LastSyncAttemptUtc",
+                DateTime.UtcNow)
+
+                command.Parameters.AddWithValue(
+                "@LastSyncedUtc",
+                If(syncStatus = "Synced",
+                   CType(DateTime.UtcNow, Object),
+                   DBNull.Value))
+
+                command.Parameters.AddWithValue(
+                "@SyncError",
+                If(String.IsNullOrEmpty(syncError),
+                   CType(DBNull.Value, Object),
+                   syncError))
+
+                command.Parameters.AddWithValue(
+                "@RowVersion",
+                rowVersionValue)
+
+                command.Parameters.AddWithValue(
+                "@LastModifiedUtc",
+                lastModifiedValue)
+
+                command.Parameters.AddWithValue(
+                "@TimeSheetID",
+                timeSheetID)
+
+                command.ExecuteNonQuery()
+            End Using
+        End Using
     End Sub
+
+
+
+
     Private Function RetrieveDataFromLocalDatabase() As List(Of TimeEntryData)
         Dim data As New List(Of TimeEntryData)
 
@@ -670,7 +989,12 @@ Public Class Form1
                 connection.Open()
 
                 ' Define a query to retrieve data from the TimeSheetT table
-                Dim query As String = "SELECT TimeSheetID, [Employee Name], Location, [Second Location], [Date], [Start Time], [End Time], [Timestamp], [Deleted] FROM TimeSheetT"
+                Dim query As String =
+    "SELECT TimeSheetID, [Employee Name], Location, " &
+    "[Second Location], [Date], [Start Time], [End Time], " &
+    "[Timestamp], [Deleted], RowVersion, LastModifiedUtc, " &
+    "SyncStatus, LastSyncAttemptUtc, LastSyncedUtc, SyncError " &
+    "FROM TimeSheetT"
 
                 ' Create a command to execute the query
                 Using command As New SQLiteCommand(query, connection)
@@ -696,6 +1020,49 @@ Public Class Form1
 
                             timeEntry.Timestamp = reader.GetDateTime(reader.GetOrdinal("Timestamp"))
                             timeEntry.Deleted = reader.GetInt32(reader.GetOrdinal("Deleted"))
+
+                            timeEntry.RowVersion =
+    If(reader.IsDBNull(
+        reader.GetOrdinal("RowVersion")),
+        Nothing,
+        DirectCast(
+            reader("RowVersion"),
+            Byte()))
+
+                            timeEntry.LastModifiedUtc =
+    If(reader.IsDBNull(
+        reader.GetOrdinal("LastModifiedUtc")),
+        CType(Nothing, DateTime?),
+        reader.GetDateTime(
+            reader.GetOrdinal("LastModifiedUtc")))
+
+                            timeEntry.SyncStatus =
+    If(reader.IsDBNull(
+        reader.GetOrdinal("SyncStatus")),
+        String.Empty,
+        reader.GetString(
+            reader.GetOrdinal("SyncStatus")))
+
+                            timeEntry.LastSyncAttemptUtc =
+    If(reader.IsDBNull(
+        reader.GetOrdinal("LastSyncAttemptUtc")),
+        CType(Nothing, DateTime?),
+        reader.GetDateTime(
+            reader.GetOrdinal("LastSyncAttemptUtc")))
+
+                            timeEntry.LastSyncedUtc =
+    If(reader.IsDBNull(
+        reader.GetOrdinal("LastSyncedUtc")),
+        CType(Nothing, DateTime?),
+        reader.GetDateTime(
+            reader.GetOrdinal("LastSyncedUtc")))
+
+                            timeEntry.SyncError =
+    If(reader.IsDBNull(
+        reader.GetOrdinal("SyncError")),
+        Nothing,
+        reader.GetString(
+            reader.GetOrdinal("SyncError")))
 
                             ' Add the retrieved data to the list
                             data.Add(timeEntry)
@@ -1043,7 +1410,7 @@ Public Class Form1
             MessageBox.Show("An error occurred while saving data to the local database: " & ex.Message)
         End Try
     End Sub
-    Private Sub addEmployee(employeeName As String)
+    Private Async Function addEmployeeAsync(employeeName As String) As Task
         Dim documentsPath As String = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
         Dim databaseFilePath As String = Path.Combine(documentsPath, "LocalTimesheet.db")
 
@@ -1061,8 +1428,8 @@ Public Class Form1
             End Using
 
 
-            RefreshData()
-            employeeNameCb.DataSource = LoadEmployeeDataFromDatabase().Result
+            Await RefreshDataAsync()
+            employeeNameCb.DataSource = Await LoadEmployeeDataFromDatabase()
             employeeNameCb.DisplayMember = "EmployeeName"
             employeeNameCb.Text = employeeName
 
@@ -1072,7 +1439,7 @@ Public Class Form1
         Catch ex As Exception
             LogWarning("An error occurred while adding the employee to the local database: " & ex.Message, Color.Green)
         End Try
-    End Sub
+    End Function
 
 
 
@@ -1594,7 +1961,7 @@ Public Class Form1
         End Try
     End Sub
 
-    Private Sub addTimeButton_Click(sender As Object, e As EventArgs) Handles addTimeButton.Click
+    Private Async Sub addTimeButton_Click(sender As Object, e As EventArgs) Handles addTimeButton.Click
 
         ' Get the selected name from the ComboBox
         Dim selectedName As String = employeeNameCb.Text
@@ -1613,7 +1980,7 @@ Public Class Form1
 
             If result = DialogResult.Yes Then
                 ' Call the function to add the employee
-                addEmployee(selectedName)
+                Await addEmployeeAsync(selectedName)
 
                 ' Continue with the code
                 ' Add any further actions you want to perform after adding the employee
@@ -1739,7 +2106,7 @@ Public Class Form1
     Public Class TimeSheetDeleteData
         Public Property TimeSheetID As Guid
     End Class
-    Private Sub deleteRecordButton_Click(sender As Object, e As EventArgs) Handles deleteRecordButton.Click
+    Private Async Sub deleteRecordButton_Click(sender As Object, e As EventArgs) Handles deleteRecordButton.Click
         Try
             ' Check if a row is selected
             If DataGridView1.SelectedRows.Count > 0 Then
@@ -1751,7 +2118,7 @@ Public Class Form1
 
                 ' Handle success (e.g., refresh the data grid)
                 LogWarning("Record marked as deleted successfully", Color.Green)
-                RefreshData()
+                Await RefreshDataAsync()
             Else
                 MessageBox.Show("Please select a row to mark as deleted. Double click the blank box that is located next to the record you would like to delete.")
             End If
@@ -2152,14 +2519,22 @@ Public Class Form1
 
 
     'Refresh the DataGridView1
-    Private Async Sub RefreshData()
+    Private Async Function RefreshDataAsync() As Task
         If IsInternetConnected() Then
             Await LoadTimeSheetDataFromDatabase()
-            SyncDatabases()
+            Await SyncPendingRecordsAsync()
         Else
-            LogWarning("No internet connection available. The application will attempt to sync at a later time", Color.Red)
+            LogWarning(
+            "No internet connection available. " &
+            "Synchronization will be attempted later.",
+            Color.Red)
+
             Await LoadTimeSheetDataFromDatabase()
         End If
+    End Function
+
+    Private Async Sub RefreshData()
+        Await RefreshDataAsync()
     End Sub
 
 
@@ -2173,9 +2548,9 @@ Public Class Form1
         Await LoadTimeSheetDataFromDatabase()
     End Sub
 
-    Private Sub refreshDataButton_Click(sender As Object, e As EventArgs) Handles refreshDataButton.Click
-        RefreshData()
+    Private Async Sub refreshDataButton_Click(sender As Object, e As EventArgs) Handles refreshDataButton.Click
 
+        Await RefreshDataAsync()
     End Sub
 
     Private Sub dateUpButton_Click(sender As Object, e As EventArgs) Handles dateUpButton.Click
@@ -2237,16 +2612,16 @@ Public Class Form1
         WarningLogRichTextBox.ScrollToCaret()
     End Sub
 
-    Private Sub ShowDeletedCheckBox_CheckedChanged(sender As Object, e As EventArgs) Handles ShowDeletedCheckBox.CheckedChanged
-        RefreshData()
+    Private Async Sub ShowDeletedCheckBox_CheckedChanged(sender As Object, e As EventArgs) Handles ShowDeletedCheckBox.CheckedChanged
+        Await RefreshDataAsync()
     End Sub
 
     Private Sub clearButton_Click(sender As Object, e As EventArgs) Handles clearButton.Click
         storeCb2.Text = String.Empty
     End Sub
 
-    Private Sub addEmployeeButton_Click(sender As Object, e As EventArgs)
-        addEmployee(employeeNameCb.Text)
+    Private Async Sub addEmployeeButton_Click(sender As Object, e As EventArgs)
+        Await addEmployeeAsync(employeeNameCb.Text)
     End Sub
 
 
